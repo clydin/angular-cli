@@ -9,9 +9,9 @@
 import { Architect, BuilderInfo, BuilderProgressState, Target } from '@angular-devkit/architect';
 import { WorkspaceNodeModulesArchitectHost } from '@angular-devkit/architect/node';
 import { logging, schema, tags, workspaces } from '@angular-devkit/core';
-import { NodeJsSyncHost, createConsoleLogger } from '@angular-devkit/core/node';
+import { createConsoleLogger } from '@angular-devkit/core/node';
 import * as ansiColors from 'ansi-colors';
-import { existsSync } from 'fs';
+import { existsSync, promises } from 'fs';
 import * as minimist from 'minimist';
 import * as path from 'path';
 import { tap } from 'rxjs/operators';
@@ -217,7 +217,7 @@ async function main(args: string[]): Promise<number> {
 
   const { workspace } = await workspaces.readWorkspace(
     configFilePath,
-    workspaces.createWorkspaceHost(new NodeJsSyncHost()),
+    workspaces.createWorkspaceHost(promises),
   );
 
   // Clear the console.
