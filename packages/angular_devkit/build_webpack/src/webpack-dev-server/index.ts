@@ -6,7 +6,6 @@
  * found in the LICENSE file at https://angular.io/license
  */
 import { BuilderContext, createBuilder } from '@angular-devkit/architect';
-import { json } from '@angular-devkit/core';
 import * as net from 'net';
 import { resolve as pathResolve } from 'path';
 import { Observable, from, isObservable, of } from 'rxjs';
@@ -118,7 +117,7 @@ export function runWebpackDevServer(
 
 
 export default createBuilder<
-  json.JsonObject & WebpackDevServerBuilderSchema, DevServerBuildOutput
+  Record<string, string> & WebpackDevServerBuilderSchema, DevServerBuildOutput
 >((options, context) => {
   const configPath = pathResolve(context.workspaceRoot, options.webpackConfig);
 
