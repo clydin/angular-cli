@@ -17,7 +17,7 @@ uplinks:
       maxFreeSockets: 8
 
 packages:
-  '@angular/{cli,pwa}':
+  '@angular/{cli,pwa,animations,common,compiler,core,forms,platform-browser,platform-browser-dynamic,router}':
     access: $all
     publish: $all
     
