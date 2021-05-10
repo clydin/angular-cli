@@ -17,10 +17,10 @@ uplinks:
       maxFreeSockets: 8
 
 packages:
-  '@angular/{cli,pwa,animations,common,compiler,core,forms,platform-browser,platform-browser-dynamic,router}':
-    access: $all
+  ? '@angular/{cli,pwa,animations,common,compiler,core,forms,platform-browser,platform-browser-dynamic,router}'
+  : access: $all
     publish: $all
-    
+
   '@angular-devkit/*':
     access: $all
     publish: $all
@@ -42,7 +42,7 @@ packages:
     proxy: npmjs
 
 logs:
-  - {type: stdout, format: pretty, level: warn}
+  - { type: stdout, format: pretty, level: warn }
 
 # https://github.com/verdaccio/verdaccio/issues/301
 server:
