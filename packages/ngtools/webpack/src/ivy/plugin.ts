@@ -140,7 +140,7 @@ export class AngularWebpackPlugin {
 
   // eslint-disable-next-line max-lines-per-function
   apply(compiler: Compiler): void {
-    const { NormalModuleReplacementPlugin, util } = compiler.webpack;
+    const { NormalModuleReplacementPlugin, sources, util } = compiler.webpack;
 
     // Setup file replacements with webpack
     for (const [key, value] of Object.entries(this.pluginOptions.fileReplacements)) {
@@ -272,7 +272,13 @@ export class AngularWebpackPlugin {
 
       // Setup source file adjustment options
       augmentHostWithReplacements(host, this.pluginOptions.fileReplacements, moduleResolutionCache);
-      augmentHostWithSubstitutions(host, this.pluginOptions.substitutions);
+      augmentHostWithSubstitutions(
+        host,
+        this.pluginOptions.substitutions,
+        !!compilerOptions.sourceMap,
+        sources,
+        cache,
+      );
 
       // Create the file emitter used by the webpack loader
       const { fileEmitter, builder, internalFiles } = this.pluginOptions.jitMode
@@ -720,6 +726,13 @@ export class AngularWebpackPlugin {
         ...(this.fileDependencies.get(filePath) || []),
         ...getExtraDependencies(sourceFile),
       ].map(externalizePath);
+
+      // if (map) {
+      //   const intermediateMap = this.sourceFileCache?.getFileSourcemap(filePath);
+      //   if (intermediateMap) {
+
+      //   }
+      // }
 
       return { content, map, dependencies, hash };
     };

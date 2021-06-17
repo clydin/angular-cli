@@ -13,6 +13,7 @@ import * as path from 'path';
 import * as ts from 'typescript';
 import { NgccProcessor } from '../ngcc_processor';
 import { WebpackResourceLoader } from '../resource_loader';
+import { SourceFileCache } from './cache';
 import { normalizePath } from './paths';
 
 export function augmentHostWithResources(
@@ -279,6 +280,9 @@ export function augmentHostWithReplacements(
 export function augmentHostWithSubstitutions(
   host: ts.CompilerHost,
   substitutions: Record<string, string>,
+  sourcemap: boolean,
+  sources: typeof import('webpack')['sources'],
+  cache: SourceFileCache,
 ): void {
   const regexSubstitutions: [RegExp, string][] = [];
   for (const [key, value] of Object.entries(substitutions)) {
@@ -290,15 +294,36 @@ export function augmentHostWithSubstitutions(
   }
 
   const baseReadFile = host.readFile;
-  host.readFile = function (...parameters) {
-    let file: string | undefined = baseReadFile.call(host, ...parameters);
-    if (file) {
-      for (const entry of regexSubstitutions) {
-        file = file.replace(entry[0], entry[1]);
+  host.readFile = function (fileName, ...parameters) {
+    let fileContent = baseReadFile.call(host, fileName, ...parameters);
+    if (fileContent) {
+      if (sourcemap) {
+        let replacer;
+        for (const [regex, replacement] of regexSubstitutions) {
+          for (const match of fileContent.matchAll(regex)) {
+            if (!replacer) {
+              replacer = new sources.ReplaceSource(
+                new sources.OriginalSource(fileContent, fileName),
+              );
+            }
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            replacer.replace(match.index!, match[0].length, replacement);
+          }
+        }
+
+        if (replacer) {
+          const { source, map } = replacer.sourceAndMap();
+          fileContent = source.toString();
+          cache.updateFileSourcemap(normalizePath(fileName), map);
+        }
+      } else {
+        for (const entry of regexSubstitutions) {
+          fileContent = fileContent.replace(entry[0], entry[1]);
+        }
       }
     }
 
-    return file;
+    return fileContent;
   };
 }
 

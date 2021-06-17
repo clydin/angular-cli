@@ -10,6 +10,7 @@ import * as ts from 'typescript';
 
 export class SourceFileCache extends Map<string, ts.SourceFile> {
   private readonly angularDiagnostics = new Map<ts.SourceFile, ts.Diagnostic[]>();
+  private readonly sourceMaps = new Map<string, object>();
 
   invalidate(file: string): void {
     const sourceFile = this.get(file);
@@ -17,6 +18,7 @@ export class SourceFileCache extends Map<string, ts.SourceFile> {
       this.delete(file);
       this.angularDiagnostics.delete(sourceFile);
     }
+    this.sourceMaps.delete(file);
   }
 
   updateAngularDiagnostics(sourceFile: ts.SourceFile, diagnostics: ts.Diagnostic[]): void {
@@ -29,5 +31,17 @@ export class SourceFileCache extends Map<string, ts.SourceFile> {
 
   getAngularDiagnostics(sourceFile: ts.SourceFile): ts.Diagnostic[] | undefined {
     return this.angularDiagnostics.get(sourceFile);
+  }
+
+  updateFileSourcemap(file: string, map: object | undefined): void {
+    if (map === undefined) {
+      this.sourceMaps.delete(file);
+    } else {
+      this.sourceMaps.set(file, map);
+    }
+  }
+
+  getFileSourcemap(file: string): object | undefined {
+    return this.sourceMaps.get(file);
   }
 }
