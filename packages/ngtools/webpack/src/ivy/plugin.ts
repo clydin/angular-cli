@@ -91,11 +91,19 @@ function hashContent(content: string): Uint8Array {
 const PLUGIN_NAME = 'angular-compiler';
 const compilationFileEmitters = new WeakMap<Compilation, FileEmitterCollection>();
 
+interface CompilerConfiguration {
+  options: CompilerOptions;
+  rootNames: string[];
+  errors: ts.Diagnostic[];
+  files: string[];
+}
+
 export class AngularWebpackPlugin {
   private readonly pluginOptions: AngularWebpackPluginOptions;
   private watchMode?: boolean;
   private ngtscNextProgram?: NgtscProgram;
   private builder?: ts.EmitAndSemanticDiagnosticsBuilderProgram;
+  private cachedConfiguration?: CompilerConfiguration;
   private sourceFileCache?: SourceFileCache;
   private readonly fileDependencies = new Map<string, Set<string>>();
   private readonly requiredFilesToEmit = new Set<string>();
@@ -179,24 +187,6 @@ export class AngularWebpackPlugin {
         ngccProcessor = processor;
       }
 
-      // Setup and read TypeScript and Angular compiler configuration
-      const { compilerOptions, rootNames, errors } = this.loadConfiguration();
-
-      // Create diagnostics reporter and report configuration file errors
-      const diagnosticsReporter = createDiagnosticsReporter(compilation);
-      diagnosticsReporter(errors);
-
-      // Update TypeScript path mapping plugin with new configuration
-      pathsPlugin.update(compilerOptions);
-
-      // Create a Webpack-based TypeScript compiler host
-      const system = createWebpackSystem(
-        // Webpack lacks an InputFileSytem type definition with sync functions
-        compiler.inputFileSystem as InputFileSystemSync,
-        normalizePath(compiler.context),
-      );
-      const host = ts.createIncrementalCompilerHost(compilerOptions, system);
-
       // Setup source file caching and reuse cache from previous compilation if present
       let cache = this.sourceFileCache;
       let changedFiles;
@@ -219,12 +209,32 @@ export class AngularWebpackPlugin {
           this.sourceFileCache = cache;
         }
       }
+
+      // Create a TypeScript system instance based on Webpack's file system
+      const system = createWebpackSystem(
+        // Webpack lacks an InputFileSytem type definition with sync functions
+        compiler.inputFileSystem as InputFileSystemSync,
+        normalizePath(compiler.context),
+      );
+
+      // Setup and read TypeScript and Angular compiler configuration
+      const compilerConfiguration = this.loadConfiguration(changedFiles);
+
+      // Create diagnostics reporter and report configuration file errors
+      const diagnosticsReporter = createDiagnosticsReporter(compilation);
+      diagnosticsReporter(compilerConfiguration.errors);
+
+      // Update TypeScript path mapping plugin with new configuration
+      pathsPlugin.update(compilerConfiguration.options);
+
+      // Create a Webpack-based TypeScript compiler host
+      const host = ts.createIncrementalCompilerHost(compilerConfiguration.options, system);
       augmentHostWithCaching(host, cache);
 
       const moduleResolutionCache = ts.createModuleResolutionCache(
         host.getCurrentDirectory(),
         host.getCanonicalFileName.bind(host),
-        compilerOptions,
+        compilerConfiguration.options,
       );
 
       // Setup source file dependency collection
@@ -247,14 +257,8 @@ export class AngularWebpackPlugin {
 
       // Create the file emitter used by the webpack loader
       const { fileEmitter, builder, internalFiles } = this.pluginOptions.jitMode
-        ? this.updateJitProgram(compilerOptions, rootNames, host, diagnosticsReporter)
-        : this.updateAotProgram(
-            compilerOptions,
-            rootNames,
-            host,
-            diagnosticsReporter,
-            resourceLoader,
-          );
+        ? this.updateJitProgram(compilerConfiguration, host, diagnosticsReporter)
+        : this.updateAotProgram(compilerConfiguration, host, diagnosticsReporter, resourceLoader);
 
       // Set of files used during the unused TypeScript file analysis
       const currentUnused = new Set<string>();
@@ -392,38 +396,76 @@ export class AngularWebpackPlugin {
     this.requiredFilesToEmitCache.clear();
   }
 
-  private loadConfiguration() {
-    const {
-      options: compilerOptions,
+  private loadConfiguration(changedFiles?: ReadonlySet<string>): CompilerConfiguration {
+    // Check if a cached configuration is still valid and use if it is valid
+    if (this.cachedConfiguration && changedFiles) {
+      let validCache = true;
+      for (const previousFile of this.cachedConfiguration.files) {
+        if (changedFiles.has(previousFile)) {
+          validCache = false;
+          break;
+        }
+      }
+
+      // This check is intended to ensure `rootNames` is accurate when an `include` file is
+      // removed from disk by forcing a recalculation of `rootNames` via a configuration read.
+      // This check could be further optimized by only checking removed files rather than all
+      // changed files and also only root files present due to the TS `include` option. However,
+      // neither sources of information are currently available here.
+      for (const rootName of this.cachedConfiguration.rootNames) {
+        if (changedFiles.has(normalizePath(rootName))) {
+          validCache = false;
+          break;
+        }
+      }
+
+      if (validCache) {
+        return this.cachedConfiguration;
+      }
+    }
+
+    const { options, rootNames, errors, project } = readConfiguration(
+      this.pluginOptions.tsconfig,
+      this.pluginOptions.compilerOptions,
+    );
+    options.enableIvy = true;
+    options.noEmitOnError = false;
+    options.suppressOutputPathCheck = true;
+    options.outDir = undefined;
+    options.inlineSources = options.sourceMap;
+    options.inlineSourceMap = false;
+    options.mapRoot = undefined;
+    options.sourceRoot = undefined;
+    options.allowEmptyCodegenFiles = false;
+    options.annotationsAs = 'decorators';
+    options.enableResourceInlining = false;
+
+    const configuration = {
+      options,
       rootNames,
       errors,
-    } = readConfiguration(this.pluginOptions.tsconfig, this.pluginOptions.compilerOptions);
-    compilerOptions.enableIvy = true;
-    compilerOptions.noEmitOnError = false;
-    compilerOptions.suppressOutputPathCheck = true;
-    compilerOptions.outDir = undefined;
-    compilerOptions.inlineSources = compilerOptions.sourceMap;
-    compilerOptions.inlineSourceMap = false;
-    compilerOptions.mapRoot = undefined;
-    compilerOptions.sourceRoot = undefined;
-    compilerOptions.allowEmptyCodegenFiles = false;
-    compilerOptions.annotationsAs = 'decorators';
-    compilerOptions.enableResourceInlining = false;
+      // NOTE: This should include the full set of extended configuration files once
+      // `readConfiguration` provides support.
+      files: [normalizePath(project)],
+    };
 
-    return { compilerOptions, rootNames, errors };
+    if (this.watchMode) {
+      this.cachedConfiguration = configuration;
+    }
+
+    return configuration;
   }
 
   private updateAotProgram(
-    compilerOptions: CompilerOptions,
-    rootNames: string[],
+    configuration: CompilerConfiguration,
     host: CompilerHost,
     diagnosticsReporter: DiagnosticsReporter,
     resourceLoader: WebpackResourceLoader,
   ) {
     // Create the Angular specific program that contains the Angular compiler
     const angularProgram = new NgtscProgram(
-      rootNames,
-      compilerOptions,
+      configuration.rootNames,
+      configuration.options,
       host,
       this.ngtscNextProgram,
     );
@@ -514,7 +556,7 @@ export class AngularWebpackPlugin {
     const transformers = createAotTransformers(builder, this.pluginOptions);
 
     const getDependencies = (sourceFile: ts.SourceFile) => {
-      const dependencies = [];
+      const dependencies = [...configuration.files];
       for (const resourcePath of angularCompiler.getResourceDependencies(sourceFile)) {
         dependencies.push(
           resourcePath,
@@ -599,23 +641,22 @@ export class AngularWebpackPlugin {
   }
 
   private updateJitProgram(
-    compilerOptions: CompilerOptions,
-    rootNames: readonly string[],
+    configuration: CompilerConfiguration,
     host: CompilerHost,
     diagnosticsReporter: DiagnosticsReporter,
   ) {
     let builder;
     if (this.watchMode) {
       builder = this.builder = ts.createEmitAndSemanticDiagnosticsBuilderProgram(
-        rootNames,
-        compilerOptions,
+        configuration.rootNames,
+        configuration.options,
         host,
         this.builder,
       );
     } else {
       // When not in watch mode, the startup cost of the incremental analysis can be avoided by
       // using an abstract builder that only wraps a TypeScript program.
-      builder = ts.createAbstractBuilder(rootNames, compilerOptions, host);
+      builder = ts.createAbstractBuilder(configuration.rootNames, configuration.options, host);
     }
 
     const diagnostics = [
@@ -630,7 +671,7 @@ export class AngularWebpackPlugin {
     const transformers = createJitTransformers(builder, this.pluginOptions);
 
     return {
-      fileEmitter: this.createFileEmitter(builder, transformers, () => []),
+      fileEmitter: this.createFileEmitter(builder, transformers, () => configuration.files),
       builder,
       internalFiles: undefined,
     };
