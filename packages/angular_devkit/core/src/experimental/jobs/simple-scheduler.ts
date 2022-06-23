@@ -121,8 +121,9 @@ function _jobShare<T>(): MonoTypeOperatorFunction<T> {
 export class SimpleScheduler<
   MinimumArgumentT extends JsonValue = JsonValue,
   MinimumInputT extends JsonValue = JsonValue,
-  MinimumOutputT extends JsonValue = JsonValue
-> implements Scheduler<MinimumArgumentT, MinimumInputT, MinimumOutputT> {
+  MinimumOutputT extends JsonValue = JsonValue,
+> implements Scheduler<MinimumArgumentT, MinimumInputT, MinimumOutputT>
+{
   private _internalJobDescriptionMap = new Map<JobName, JobHandlerWithExtra>();
   private _queue: (() => void)[] = [];
   private _pauseCounter = 0;
@@ -148,7 +149,7 @@ export class SimpleScheduler<
 
         const description: JobDescription = {
           // Make a copy of it to be sure it's proper JSON.
-          ...JSON.parse(JSON.stringify(handler.jobDescription)),
+          ...(JSON.parse(JSON.stringify(handler.jobDescription)) as JobDescription),
           name: handler.jobDescription.name || name,
           argument: handler.jobDescription.argument || true,
           input: handler.jobDescription.input || true,
@@ -447,7 +448,7 @@ export class SimpleScheduler<
         let maybeObservable = channels.get(name);
         if (!maybeObservable) {
           const s = new Subject<T>();
-          channelsSubject.set(name, (s as unknown) as Subject<JsonValue>);
+          channelsSubject.set(name, s as unknown as Subject<JsonValue>);
           channels.set(name, s.asObservable());
 
           maybeObservable = s.asObservable();
@@ -486,7 +487,7 @@ export class SimpleScheduler<
   protected _scheduleJob<
     A extends MinimumArgumentT,
     I extends MinimumInputT,
-    O extends MinimumOutputT
+    O extends MinimumOutputT,
   >(
     name: JobName,
     argument: A,

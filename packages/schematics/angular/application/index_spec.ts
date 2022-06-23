@@ -78,7 +78,7 @@ describe('Application Schematic', () => {
     const tree = await schematicRunner
       .runSchematicAsync('application', options, workspaceTree)
       .toPromise();
-    const workspace = JSON.parse(tree.readContent('/angular.json'));
+    const workspace = readJsonFile(tree, '/angular.json');
     expect(workspace.projects.foo).toBeDefined();
   });
 
@@ -88,7 +88,7 @@ describe('Application Schematic', () => {
     const tree = await schematicRunner
       .runSchematicAsync('application', options, workspaceTree)
       .toPromise();
-    const workspace = JSON.parse(tree.readContent('/angular.json'));
+    const workspace = readJsonFile(tree, '/angular.json');
     expect(workspace.projects.foo.prefix).toEqual('app');
   });
 
@@ -98,7 +98,7 @@ describe('Application Schematic', () => {
     const tree = await schematicRunner
       .runSchematicAsync('application', options, workspaceTree)
       .toPromise();
-    const workspace = JSON.parse(tree.readContent('/angular.json'));
+    const workspace = readJsonFile(tree, '/angular.json');
     expect(workspace.projects.foo.prefix).toEqual('pre');
   });
 
@@ -183,7 +183,7 @@ describe('Application Schematic', () => {
     const tree = await schematicRunner
       .runSchematicAsync('application', options, workspaceTree)
       .toPromise();
-    const config = JSON.parse(tree.readContent('/angular.json'));
+    const config = readJsonFile(tree, '/angular.json');
     const schematics = config.projects.foo.schematics;
 
     expect(schematics['@schematics/angular:class']).toEqual({ skipTests: true });
@@ -201,7 +201,7 @@ describe('Application Schematic', () => {
     const tree = await schematicRunner
       .runSchematicAsync('application', options, workspaceTree)
       .toPromise();
-    const config = JSON.parse(tree.readContent('/angular.json'));
+    const config = readJsonFile(tree, '/angular.json');
     const architect = config.projects.foo.architect;
     expect(architect.test).not.toBeDefined();
     expect(architect.e2e).not.toBeDefined();
@@ -212,7 +212,7 @@ describe('Application Schematic', () => {
     const tree = await schematicRunner
       .runSchematicAsync('application', options, workspaceTree)
       .toPromise();
-    const config = JSON.parse(tree.readContent('/angular.json'));
+    const config = readJsonFile(tree, '/angular.json');
     const schematics = config.projects.foo.schematics;
     expect(schematics['@schematics/angular:component']).toEqual({
       inlineTemplate: true,
@@ -226,7 +226,7 @@ describe('Application Schematic', () => {
     const tree = await schematicRunner
       .runSchematicAsync('application', options, workspaceTree)
       .toPromise();
-    const config = JSON.parse(tree.readContent('/angular.json'));
+    const config = readJsonFile(tree, '/angular.json');
     const schematics = config.projects.foo.schematics;
     expect(schematics['@schematics/angular:component']).toEqual({
       inlineTemplate: true,
@@ -239,7 +239,7 @@ describe('Application Schematic', () => {
     const tree = await schematicRunner
       .runSchematicAsync('application', options, workspaceTree)
       .toPromise();
-    const config = JSON.parse(tree.readContent('/angular.json'));
+    const config = readJsonFile(tree, '/angular.json');
     const schematics = config.projects.foo.schematics;
     expect(schematics['@schematics/angular:component']).toEqual({
       inlineStyle: true,
@@ -431,7 +431,7 @@ describe('Application Schematic', () => {
       const tree = await schematicRunner
         .runSchematicAsync('application', options, workspaceTree)
         .toPromise();
-      const config = JSON.parse(tree.readContent('/angular.json'));
+      const config = readJsonFile(tree, '/angular.json');
       const prj = config.projects.foo;
       expect(prj.root).toEqual('');
       const buildOpt = prj.architect.build.options;
@@ -452,7 +452,7 @@ describe('Application Schematic', () => {
       const tree = await schematicRunner
         .runSchematicAsync('application', options, workspaceTree)
         .toPromise();
-      const config = JSON.parse(tree.readContent('/angular.json'));
+      const config = readJsonFile(tree, '/angular.json');
       const prj = config.projects.foo;
       const buildOpt = prj.architect.build.options;
       expect(buildOpt.styles).toEqual(['src/styles.sass']);
@@ -466,7 +466,7 @@ describe('Application Schematic', () => {
       const tree = await schematicRunner
         .runSchematicAsync('application', options, workspaceTree)
         .toPromise();
-      const config = JSON.parse(tree.readContent('/angular.json'));
+      const config = readJsonFile(tree, '/angular.json');
       const prj = config.projects.foo;
 
       const buildOpt = prj.architect.build.options;
@@ -481,7 +481,7 @@ describe('Application Schematic', () => {
       const tree = await schematicRunner
         .runSchematicAsync('application', options, workspaceTree)
         .toPromise();
-      const config = JSON.parse(tree.readContent('/angular.json'));
+      const config = readJsonFile(tree, '/angular.json');
       const prj = config.projects.foo;
 
       const buildOpt = prj.architect.build.options;
@@ -496,7 +496,7 @@ describe('Application Schematic', () => {
       const tree = await schematicRunner
         .runSchematicAsync('application', options, workspaceTree)
         .toPromise();
-      const config = JSON.parse(tree.readContent('/angular.json'));
+      const config = readJsonFile(tree, '/angular.json');
       const prj = config.projects.foo;
 
       const buildOpt = prj.architect.build.options;
@@ -526,7 +526,7 @@ describe('Application Schematic', () => {
       const tree = await schematicRunner
         .runSchematicAsync('application', options, workspaceTree)
         .toPromise();
-      const config = JSON.parse(tree.readContent('/angular.json'));
+      const config = readJsonFile(tree, '/angular.json');
       const project = config.projects.foo;
       expect(project.root).toEqual('foo');
       const buildOpt = project.architect.build.options;
@@ -595,7 +595,7 @@ describe('Application Schematic', () => {
       .runSchematicAsync('application', options, workspaceTree)
       .toPromise();
 
-    const cfg = JSON.parse(tree.readContent('/angular.json'));
+    const cfg = readJsonFile(tree, '/angular.json');
     expect(cfg.projects['@myscope/myapp']).toBeDefined();
 
     const karmaConf = getFileContent(tree, '/projects/myscope/myapp/karma.conf.js');

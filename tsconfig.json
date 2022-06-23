@@ -42,7 +42,7 @@
       {
         "name": "@bazel/tsetse",
         // must-use-promises is handled by the eslint @typescript-eslint/no-floating-promises rule
-        "disabledRules": ["must-type-assert-json-parse", "must-use-promises"]
+        "disabledRules": ["must-use-promises"]
       }
     ]
   },

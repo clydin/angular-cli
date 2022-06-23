@@ -53,7 +53,8 @@ describe('PWA Schematic', () => {
       .toPromise()
       .then((tree) => {
         const configText = tree.readContent('/angular.json');
-        const config = JSON.parse(configText);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const config = JSON.parse(configText) as any;
         const swFlag = config.projects.bar.architect.build.options.serviceWorker;
         expect(swFlag).toEqual(true);
         done();
@@ -91,7 +92,7 @@ describe('PWA Schematic', () => {
       .toPromise()
       .then((tree) => {
         const manifestText = tree.readContent('/projects/bar/src/manifest.webmanifest');
-        const manifest = JSON.parse(manifestText);
+        const manifest = JSON.parse(manifestText) as { name?: string; short_name?: string };
 
         expect(manifest.name).toEqual(defaultOptions.title);
         expect(manifest.short_name).toEqual(defaultOptions.title);
@@ -106,7 +107,7 @@ describe('PWA Schematic', () => {
       .toPromise()
       .then((tree) => {
         const manifestText = tree.readContent('/projects/bar/src/manifest.webmanifest');
-        const manifest = JSON.parse(manifestText);
+        const manifest = JSON.parse(manifestText) as { name?: string; short_name?: string };
 
         expect(manifest.name).toEqual(defaultOptions.project);
         expect(manifest.short_name).toEqual(defaultOptions.project);
@@ -156,7 +157,8 @@ describe('PWA Schematic', () => {
       .toPromise()
       .then((tree) => {
         const configText = tree.readContent('/angular.json');
-        const config = JSON.parse(configText);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const config = JSON.parse(configText) as any;
         const targets = config.projects.bar.architect;
 
         ['build', 'test'].forEach((target) => {

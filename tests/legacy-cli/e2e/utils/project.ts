@@ -13,7 +13,7 @@ import { exec, execAndWaitForOutputToMatch, git, ng } from './process';
 export function updateJsonFile(filePath: string, fn: (json: any) => any | void) {
   return readFile(filePath).then((tsConfigJson) => {
     // Remove single and multiline comments
-    const tsConfig = JSON.parse(tsConfigJson.replace(/\/\*\s(.|\n|\r)*\s\*\/|\/\/.*/g, ''));
+    const tsConfig = JSON.parse(tsConfigJson.replace(/\/\*\s(.|\n|\r)*\s\*\/|\/\/.*/g, '')) as any;
     const result = fn(tsConfig) || tsConfig;
 
     return writeFile(filePath, JSON.stringify(result, null, 2));
