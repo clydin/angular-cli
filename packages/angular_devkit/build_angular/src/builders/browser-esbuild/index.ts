@@ -27,6 +27,7 @@ import { extractLicenses } from './license-extractor';
 import { NormalizedBrowserOptions, normalizeOptions } from './options';
 import { shutdownSassWorkerPool } from './sass-plugin';
 import { Schema as BrowserBuilderOptions } from './schema';
+import { createServerCodeBundleOptions } from './server-bundle-options';
 import { createStylesheetBundleOptions } from './stylesheets';
 import { ChangedFiles, createWatcher } from './watcher';
 
@@ -70,6 +71,7 @@ class ExecutionResult {
   }
 }
 
+// eslint-disable-next-line max-lines-per-function
 async function execute(
   options: NormalizedBrowserOptions,
   context: BuilderContext,
@@ -92,9 +94,10 @@ async function execute(
   );
 
   // Reuse rebuild state or create new bundle contexts for code and global stylesheets
-  const codeBundleCache = options.watch
-    ? rebuildState?.codeBundleCache ?? new SourceFileCache()
-    : undefined;
+  const codeBundleCache =
+    options.watch || options.serverEntryPoint
+      ? rebuildState?.codeBundleCache ?? new SourceFileCache()
+      : undefined;
   const codeBundleContext =
     rebuildState?.codeRebuild ??
     new BundlerContext(
@@ -208,6 +211,21 @@ async function execute(
   // Copy assets
   if (assets) {
     await copyAssets(assets, [outputPath], workspaceRoot);
+  }
+
+  // Generate server build if enabled
+  if (options.serverEntryPoint && codeBundleCache) {
+    // TODO: This should be incremental eventually
+    const serverContext = new BundlerContext(
+      workspaceRoot,
+      false,
+      createServerCodeBundleOptions(options, codeBundleCache),
+    );
+    const serverResults = await serverContext.bundle();
+    await logMessages(context, serverResults);
+    if (!serverResults.errors) {
+      outputFiles.push(...serverResults.outputFiles);
+    }
   }
 
   // Write output files

@@ -16,6 +16,10 @@
       "type": "string",
       "description": "The full path for the main entry point to the app, relative to the current workspace."
     },
+    "server": {
+      "type": "string",
+      "description": "The full path for the server entry point to the app, relative to the current workspace."
+    },
     "polyfills": {
       "description": "Polyfills to be included in the build.",
       "oneOf": [

@@ -44,6 +44,7 @@ export async function normalizeOptions(
   const cacheOptions = normalizeCacheOptions(projectMetadata, workspaceRoot);
 
   const mainEntryPoint = path.join(workspaceRoot, options.main);
+  const serverEntryPoint = options.server && path.join(workspaceRoot, options.server);
 
   // Currently esbuild do not support multiple files per entry-point
   const [polyfillsEntryPoint, ...remainingPolyfills] = normalizePolyfills(
@@ -179,5 +180,6 @@ export async function normalizeOptions(
     globalStyles,
     serviceWorkerOptions,
     indexHtmlOptions,
+    serverEntryPoint,
   };
 }
