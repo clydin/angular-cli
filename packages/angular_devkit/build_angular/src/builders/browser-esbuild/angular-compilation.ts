@@ -25,7 +25,6 @@ class AngularCompilationState {
   constructor(
     public readonly angularProgram: ng.NgtscProgram,
     public readonly typeScriptProgram: ts.EmitAndSemanticDiagnosticsBuilderProgram,
-    public readonly affectedFiles: ReadonlySet<ts.SourceFile>,
     public readonly templateDiagnosticsOptimization: ng.OptimizeFor,
     public readonly diagnosticCache = new WeakMap<ts.SourceFile, ts.Diagnostic[]>(),
   ) {}
@@ -62,7 +61,7 @@ export class AngularCompilation {
     compilerOptions: ng.CompilerOptions,
     hostOptions: AngularHostOptions,
     configurationDiagnostics?: ts.Diagnostic[],
-  ): Promise<{ affectedFiles: ReadonlySet<ts.SourceFile> }> {
+  ): Promise<void> {
     // Dynamically load the Angular compiler CLI package
     const { NgtscProgram, OptimizeFor } = await AngularCompilation.loadCompilerCli();
 
@@ -86,30 +85,23 @@ export class AngularCompilation {
     );
 
     await profileAsync('NG_ANALYZE_PROGRAM', () => angularCompiler.analyzeAsync());
-    const affectedFiles = profileSync('NG_FIND_AFFECTED', () =>
-      findAffectedFiles(typeScriptProgram, angularCompiler),
-    );
 
     this.#state = new AngularCompilationState(
       angularProgram,
       typeScriptProgram,
-      affectedFiles,
-      affectedFiles.size === 1 ? OptimizeFor.SingleFile : OptimizeFor.WholeProgram,
+      OptimizeFor.WholeProgram,
       this.#state?.diagnosticCache,
     );
-
-    return { affectedFiles };
   }
 
   *collectDiagnostics(): Iterable<ts.Diagnostic> {
     assert(this.#state, 'Angular compilation must be initialized prior to collecting diagnostics.');
-    const {
-      affectedFiles,
-      angularCompiler,
-      diagnosticCache,
-      templateDiagnosticsOptimization,
-      typeScriptProgram,
-    } = this.#state;
+    const { angularCompiler, diagnosticCache, templateDiagnosticsOptimization, typeScriptProgram } =
+      this.#state;
+
+    const affectedFiles = profileSync('NG_FIND_AFFECTED', () =>
+      findAffectedFiles(typeScriptProgram, angularCompiler),
+    );
 
     // Collect program level diagnostics
     yield* typeScriptProgram.getConfigFileParsingDiagnostics();
@@ -160,38 +152,64 @@ export class AngularCompilation {
     }
   }
 
-  createFileEmitter(onAfterEmit?: (sourceFile: ts.SourceFile) => void): FileEmitter {
+  emitAffectedFiles(): Iterable<{ filename: string; contents: string }> {
     assert(this.#state, 'Angular compilation must be initialized prior to emitting files.');
     const { angularCompiler, typeScriptProgram } = this.#state;
 
-    const transformers = mergeTransformers(angularCompiler.prepareEmit().transformers, {
-      before: [replaceBootstrap(() => typeScriptProgram.getProgram().getTypeChecker())],
-    });
-
-    return async (file: string) => {
-      const sourceFile = typeScriptProgram.getSourceFile(file);
-      if (!sourceFile) {
-        return undefined;
+    const emittedFiles = new Map<string, { filename: string; contents: string }>();
+    const writeFileCallback: ts.WriteFileCallback = (filename, contents, _a, _b, sourceFiles) => {
+      if (sourceFiles?.length === 0 && filename.endsWith('.tsbuildinfo')) {
+        return;
       }
 
-      let content: string | undefined;
-      typeScriptProgram.emit(
-        sourceFile,
-        (filename, data) => {
-          if (/\.[cm]?js$/.test(filename)) {
-            content = data;
-          }
-        },
-        undefined /* cancellationToken */,
-        undefined /* emitOnlyDtsFiles */,
-        transformers,
+      assert(
+        sourceFiles?.length === 1,
+        'Compilation write callback source files should only be one.',
       );
 
-      angularCompiler.incrementalCompilation.recordSuccessfulEmit(sourceFile);
-      onAfterEmit?.(sourceFile);
+      // Use the original TS name to match with the actual import resolution when bundling
+      const inputFilename = sourceFiles[0].fileName;
 
-      return { content, dependencies: [] };
+      // Skip storing any Angular template typecheck files since they will never be bundled.
+      if (inputFilename.endsWith('.ngtypecheck.ts')) {
+        return;
+      }
+
+      emittedFiles.set(inputFilename, { filename: inputFilename, contents });
     };
+    const transformers = mergeTransformers(angularCompiler.prepareEmit().transformers, {
+      before: [
+        replaceBootstrap(() => typeScriptProgram.getProgram().getTypeChecker()),
+        // Add a transformer that converts all internal Angular template typecheck files to empty files.
+        // This is done to improve the performance of the program emit since there is currently no way
+        // to ignore specific files with `emitNextAffectedFile`.
+        ({ factory }) =>
+          (sf) =>
+            sf.fileName.endsWith('.ngtypecheck.ts') ? factory.updateSourceFile(sf, []) : sf,
+      ],
+    } as ts.CustomTransformers);
+
+    // TypeScript will loop until there are no more affected files in the program
+    while (
+      typeScriptProgram.emitNextAffectedFile(writeFileCallback, undefined, undefined, transformers)
+    ) {
+      /* empty */
+    }
+
+    // Angular may have files that must be emitted but TypeScript does not consider affected
+    for (const sourceFile of typeScriptProgram.getSourceFiles()) {
+      if (emittedFiles.has(sourceFile.fileName) || angularCompiler.ignoreForEmit.has(sourceFile)) {
+        continue;
+      }
+
+      if (angularCompiler.incrementalCompilation.safeToSkipEmit(sourceFile)) {
+        continue;
+      }
+
+      typeScriptProgram.emit(sourceFile, writeFileCallback, undefined, undefined, transformers);
+    }
+
+    return emittedFiles.values();
   }
 }
 

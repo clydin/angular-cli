@@ -36,7 +36,7 @@ export class JitCompilation {
     compilerOptions: ts.CompilerOptions,
     hostOptions: AngularHostOptions,
     configurationDiagnostics?: ts.Diagnostic[],
-  ): Promise<{ affectedFiles: ReadonlySet<ts.SourceFile> }> {
+  ): Promise<void> {
     // Dynamically load the Angular compiler CLI package
     const { constructorParametersDownlevelTransform } = await AngularCompilation.loadCompilerCli();
 
@@ -54,17 +54,11 @@ export class JitCompilation {
       ),
     );
 
-    const affectedFiles = profileSync('TS_FIND_AFFECTED', () =>
-      findAffectedFiles(typeScriptProgram),
-    );
-
     this.#state = new JitCompilationState(
       typeScriptProgram,
       constructorParametersDownlevelTransform(typeScriptProgram.getProgram()),
       createJitResourceTransformer(() => typeScriptProgram.getProgram().getTypeChecker()),
     );
-
-    return { affectedFiles };
   }
 
   *collectDiagnostics(): Iterable<ts.Diagnostic> {
@@ -81,7 +75,7 @@ export class JitCompilation {
     yield* profileSync('NG_DIAGNOSTICS_SEMANTIC', () => typeScriptProgram.getSemanticDiagnostics());
   }
 
-  createFileEmitter(onAfterEmit?: (sourceFile: ts.SourceFile) => void): FileEmitter {
+  emitAffectedFiles(): Iterable<{ filename: string; contents: string }> {
     assert(this.#state, 'Compilation must be initialized prior to emitting files.');
     const {
       typeScriptProgram,
@@ -93,29 +87,31 @@ export class JitCompilation {
       before: [replaceResourcesTransform, constructorParametersDownlevelTransform],
     };
 
-    return async (file: string) => {
-      const sourceFile = typeScriptProgram.getSourceFile(file);
-      if (!sourceFile) {
-        return undefined;
+    const emittedFiles: { filename: string; contents: string }[] = [];
+    const writeFileCallback: ts.WriteFileCallback = (filename, contents, _a, _b, sourceFiles) => {
+      if (sourceFiles?.length === 0 && filename.endsWith('.tsbuildinfo')) {
+        return;
       }
 
-      let content: string | undefined;
-      typeScriptProgram.emit(
-        sourceFile,
-        (filename, data) => {
-          if (/\.[cm]?js$/.test(filename)) {
-            content = data;
-          }
-        },
-        undefined /* cancellationToken */,
-        undefined /* emitOnlyDtsFiles */,
-        transformers,
+      assert(
+        sourceFiles?.length === 1,
+        'Compilation write callback source files should only be one.',
       );
 
-      onAfterEmit?.(sourceFile);
+      // Use the original TS name to match with the actual import resolution when bundling
+      const inputFilename = sourceFiles[0].fileName;
 
-      return { content, dependencies: [] };
+      emittedFiles.push({ filename: inputFilename, contents });
     };
+
+    // TypeScript will loop until there are no more affected files in the program
+    while (
+      typeScriptProgram.emitNextAffectedFile(writeFileCallback, undefined, undefined, transformers)
+    ) {
+      /* empty */
+    }
+
+    return emittedFiles;
   }
 }
 

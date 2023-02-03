@@ -15,7 +15,7 @@ import type {
   Plugin,
   PluginBuild,
 } from 'esbuild';
-import * as assert from 'node:assert';
+import assert from 'node:assert';
 import { platform } from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -23,7 +23,7 @@ import ts from 'typescript';
 import { maxWorkers } from '../../utils/environment-options';
 import { JitCompilation } from './angular/jit-compilation';
 import { setupJitPluginCallbacks } from './angular/jit-plugin-callbacks';
-import { AngularCompilation, FileEmitter } from './angular-compilation';
+import { AngularCompilation } from './angular-compilation';
 import { AngularHostOptions } from './angular-host';
 import { JavaScriptTransformer } from './javascript-transformer';
 import {
@@ -122,7 +122,7 @@ const WINDOWS_SEP_REGEXP = new RegExp(`\\${path.win32.sep}`, 'g');
 export class SourceFileCache extends Map<string, ts.SourceFile> {
   readonly modifiedFiles = new Set<string>();
   readonly babelFileCache = new Map<string, Uint8Array>();
-  readonly typeScriptFileCache = new Map<string, Uint8Array>();
+  readonly typeScriptFileCache = new Map<string, string | Uint8Array>();
 
   invalidate(files: Iterable<string>): void {
     this.modifiedFiles.clear();
@@ -230,8 +230,13 @@ export function createCompilerPlugin(
         });
       }
 
-      // The file emitter created during `onStart` that will be used during the build in `onLoad` callbacks for TS files
-      let fileEmitter: FileEmitter | undefined;
+      // The output content of files emitted by the TypeScript and Angular compilers used by the
+      // plugin loader callback. Content of type string is the raw output of the compilers and
+      // content of Uint8Array is the content after processed by the JS transformer. The JS transformer
+      // is only asynchronously applied within the loader callback as files are needed by esbuild.
+      const emittedTypeScriptFiles =
+        pluginOptions.sourceFileCache?.typeScriptFileCache ??
+        new Map<string, string | Uint8Array>();
 
       // The stylesheet resources from component stylesheets that will be added to the build results output files
       let stylesheetResourceFiles: OutputFile[] = [];
@@ -295,21 +300,24 @@ export function createCompilerPlugin(
 
         // Initialize the Angular compilation for the current build.
         // In watch mode, previous build state will be reused.
-        const { affectedFiles } = await compilation.initialize(
+        await compilation.initialize(
           rootNames,
           compilerOptions,
           hostOptions,
           configurationDiagnostics,
         );
 
-        // Clear affected files from the cache (if present)
-        if (pluginOptions.sourceFileCache) {
-          for (const affected of affectedFiles) {
-            pluginOptions.sourceFileCache.typeScriptFileCache.delete(
-              pathToFileURL(affected.fileName).href,
+        // Store/update the emitted TypeScript files used by the plugin load callback
+        profileSync('NG_EMIT_TS', () => {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          for (const { filename, contents } of compilation!.emitAffectedFiles()) {
+            assert(
+              typeof contents === 'string',
+              'Emitted TypeScript content should always be a string.',
             );
+            emittedTypeScriptFiles.set(pathToFileURL(filename).href, contents);
           }
-        }
+        });
 
         profileSync('NG_DIAGNOSTICS_TOTAL', () => {
           // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -323,8 +331,6 @@ export function createCompilerPlugin(
           }
         });
 
-        fileEmitter = compilation.createFileEmitter();
-
         return result;
       });
 
@@ -332,51 +338,45 @@ export function createCompilerPlugin(
         { filter: compilerOptions.allowJs ? /\.[cm]?[jt]sx?$/ : /\.[cm]?tsx?$/ },
         (args) =>
           profileAsync(
-            'NG_EMIT_TS*',
+            'NG_LOAD_TS*',
             async () => {
-              assert.ok(fileEmitter, 'Invalid plugin execution order');
-
               const request = pluginOptions.fileReplacements?.[args.path] ?? args.path;
 
               // The filename is currently used as a cache key. Since the cache is memory only,
               // the options cannot change and do not need to be represented in the key. If the
               // cache is later stored to disk, then the options that affect transform output
               // would need to be added to the key as well as a check for any change of content.
-              let contents = pluginOptions.sourceFileCache?.typeScriptFileCache.get(
-                pathToFileURL(request).href,
-              );
+              let contents = emittedTypeScriptFiles.get(pathToFileURL(request).href);
 
               if (contents === undefined) {
-                const typescriptResult = await fileEmitter(request);
-                if (!typescriptResult?.content) {
-                  // No TS result indicates the file is not part of the TypeScript program.
-                  // If allowJs is enabled and the file is JS then defer to the next load hook.
-                  if (compilerOptions.allowJs && /\.[cm]?js$/.test(request)) {
-                    return undefined;
-                  }
-
-                  // Otherwise return an error
-                  return {
-                    errors: [
-                      createMissingFileError(
-                        request,
-                        args.path,
-                        build.initialOptions.absWorkingDir ?? '',
-                      ),
-                    ],
-                  };
+                // No TS result indicates the file is not part of the TypeScript program.
+                // If allowJs is enabled and the file is JS then defer to the next load hook.
+                if (compilerOptions.allowJs && /\.[cm]?js$/.test(request)) {
+                  return undefined;
                 }
 
+                // Otherwise return an error
+                return {
+                  errors: [
+                    createMissingFileError(
+                      request,
+                      args.path,
+                      build.initialOptions.absWorkingDir ?? '',
+                    ),
+                  ],
+                };
+              } else if (typeof contents === 'string') {
+                // A string type indicates the raw content from the output of the Angular/TypeScript
+                // compilers and needs to be processed with any required JavaScript transformers.
+                // The output of the JavaScript transformer is a Uint8Array which is used directly
+                // by esbuild.
                 contents = await javascriptTransformer.transformData(
                   request,
-                  typescriptResult.content,
+                  contents,
                   true /* skipLinker */,
                 );
 
-                pluginOptions.sourceFileCache?.typeScriptFileCache.set(
-                  pathToFileURL(request).href,
-                  contents,
-                );
+                emittedTypeScriptFiles.set(pathToFileURL(request).href, contents);
               }
 
               return {
@@ -390,7 +390,7 @@ export function createCompilerPlugin(
 
       build.onLoad({ filter: /\.[cm]?js$/ }, (args) =>
         profileAsync(
-          'NG_EMIT_JS*',
+          'NG_LOAD_JS*',
           async () => {
             // The filename is currently used as a cache key. Since the cache is memory only,
             // the options cannot change and do not need to be represented in the key. If the
