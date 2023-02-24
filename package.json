@@ -94,6 +94,7 @@
     "@bazel/buildifier": "6.0.1",
     "@bazel/concatjs": "5.8.1",
     "@bazel/jasmine": "5.8.1",
+    "@clack/prompts": "0.5.1",
     "@discoveryjs/json-ext": "0.5.7",
     "@types/babel__core": "7.20.0",
     "@types/babel__template": "7.4.1",

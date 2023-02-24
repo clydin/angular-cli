@@ -122,7 +122,6 @@
 
 "@angular/build-tooling@https://github.com/angular/dev-infra-private-build-tooling-builds.git#f7296791baceb1a519585e73a900d479f42cb73f":
   version "0.0.0-a8ea953071698c8900e90552e333f21ce994bae5"
-  uid f7296791baceb1a519585e73a900d479f42cb73f
   resolved "https://github.com/angular/dev-infra-private-build-tooling-builds.git#f7296791baceb1a519585e73a900d479f42cb73f"
   dependencies:
     "@angular-devkit/build-angular" "15.2.0-rc.0"
@@ -306,7 +305,6 @@
 
 "@angular/ng-dev@https://github.com/angular/dev-infra-private-ng-dev-builds.git#bda820aabd0eec5d5d7380cb1b4254247628676c":
   version "0.0.0-a8ea953071698c8900e90552e333f21ce994bae5"
-  uid bda820aabd0eec5d5d7380cb1b4254247628676c
   resolved "https://github.com/angular/dev-infra-private-ng-dev-builds.git#bda820aabd0eec5d5d7380cb1b4254247628676c"
   dependencies:
     "@yarnpkg/lockfile" "^1.1.0"
@@ -1404,6 +1402,23 @@
   version "0.2.3"
   resolved "https://registry.yarnpkg.com/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz#75a2e8b51cb758a7553d6804a5932d7aace75c39"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
+
+"@clack/core@^0.2.1":
+  version "0.2.1"
+  resolved "https://registry.yarnpkg.com/@clack/core/-/core-0.2.1.tgz#b4ae3e5f00f66f10c0d4ae288ec30a0f6cd4b137"
+  integrity sha512-MIZMbzA9IOdjXDAKh2/gfTic3yt554WFXszjjpVfI/Rs5/ofoEjuvdOE2amDQeVnGTHfRL0QB1SBPnoxyliuuA==
+  dependencies:
+    picocolors "^1.0.0"
+    sisteransi "^1.0.5"
+
+"@clack/prompts@0.5.1":
+  version "0.5.1"
+  resolved "https://registry.yarnpkg.com/@clack/prompts/-/prompts-0.5.1.tgz#dbb8418374da0b5eff3c2389533762db675f4161"
+  integrity sha512-qkaher9atkx4Sw+Ti1q05tc9ZvkmXNqBTYn6lf/xbD9lW4qZcGn8Nr6I66zGmhE2SpiyN878b9LWcSJShnRnYA==
+  dependencies:
+    "@clack/core" "^0.2.1"
+    picocolors "^1.0.0"
+    sisteransi "^1.0.5"
 
 "@colors/colors@1.5.0":
   version "1.5.0"
@@ -10374,6 +10389,11 @@ sigstore@^1.0.0:
   dependencies:
     make-fetch-happen "^11.0.1"
     tuf-js "^1.0.0"
+
+sisteransi@^1.0.5:
+  version "1.0.5"
+  resolved "https://registry.yarnpkg.com/sisteransi/-/sisteransi-1.0.5.tgz#134d681297756437cc05ca01370d3a7a571075ed"
+  integrity sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg==
 
 slash@^3.0.0:
   version "3.0.0"

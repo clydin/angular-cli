@@ -170,76 +170,69 @@ export abstract class SchematicsCommandModule
 
     if (options.interactive !== false && isTTY()) {
       workflow.registry.usePromptProvider(async (definitions: Array<schema.PromptDefinition>) => {
-        const questions = definitions
-          .filter((definition) => !options.defaults || definition.default === undefined)
-          .map((definition) => {
-            const question: Question = {
-              name: definition.id,
-              message: definition.message,
-              default: definition.default,
-            };
+        const prompts = await import('@clack/prompts');
 
-            const validator = definition.validator;
-            if (validator) {
-              question.validate = (input) => validator(input);
+        const questions = Object.fromEntries(
+          definitions
+            .filter((definition) => !options.defaults || definition.default === undefined)
+            .map((definition) => [
+              definition.id,
+              async () => {
+                let validate;
+                const schemaValidator = definition.validator;
+                if (schemaValidator) {
+                  validate = (value: string) => {
+                    for (const type of definition.propertyTypes) {
+                      let typedValue;
+                      switch (type) {
+                        case 'integer':
+                        case 'number':
+                          typedValue = Number(value);
+                          break;
+                        default:
+                          typedValue = value;
+                          break;
+                      }
 
-              // Filter allows transformation of the value prior to validation
-              question.filter = async (input) => {
-                for (const type of definition.propertyTypes) {
-                  let value;
-                  switch (type) {
-                    case 'string':
-                      value = String(input);
-                      break;
-                    case 'integer':
-                    case 'number':
-                      value = Number(input);
-                      break;
-                    default:
-                      value = input;
-                      break;
-                  }
-                  // Can be a string if validation fails
-                  const isValid = (await validator(value)) === true;
-                  if (isValid) {
-                    return value;
-                  }
+                      const isValid = schemaValidator(typedValue) === true;
+                      if (isValid) {
+                        return;
+                      }
+                    }
+                  };
                 }
 
-                return input;
-              };
-            }
+                switch (definition.type) {
+                  case 'confirmation':
+                    return prompts.confirm({ message: definition.message });
+                  case 'input':
+                    return prompts.text({ message: definition.message });
+                  case 'list':
+                    return (definition.multiselect ? prompts.multiselect : prompts.select)({
+                      message: definition.message,
+                      options:
+                        definition.items?.map((item) => {
+                          return typeof item == 'string'
+                            ? {
+                                label: item,
+                                value: item,
+                              }
+                            : {
+                                label: item.label,
+                                value: `${item.value}`,
+                              };
+                        }) ?? [],
+                    });
+                  default:
+                    throw new Error(
+                      `Invalid schematics prompt definition type[${definition.type}] for ${definition.id}.`,
+                    );
+                }
+              },
+            ]),
+        );
 
-            switch (definition.type) {
-              case 'confirmation':
-                question.type = 'confirm';
-                break;
-              case 'list':
-                question.type = definition.multiselect ? 'checkbox' : 'list';
-                (question as CheckboxQuestion).choices = definition.items?.map((item) => {
-                  return typeof item == 'string'
-                    ? item
-                    : {
-                        name: item.label,
-                        value: item.value,
-                      };
-                });
-                break;
-              default:
-                question.type = definition.type;
-                break;
-            }
-
-            return question;
-          });
-
-        if (questions.length) {
-          const { prompt } = await import('inquirer');
-
-          return prompt(questions);
-        } else {
-          return {};
-        }
+        return prompts.group(questions);
       });
     }
 
