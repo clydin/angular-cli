@@ -17,7 +17,7 @@ import path from 'node:path';
 import { InlineConfig, ViteDevServer, createServer, normalizePath } from 'vite';
 import { buildEsbuildBrowser } from '../browser-esbuild';
 import type { Schema as BrowserBuilderOptions } from '../browser-esbuild/schema';
-import { loadProxyConfiguration } from './load-proxy-config';
+import { loadProxyConfiguration, normalizeProxyConfiguration } from './load-proxy-config';
 import type { NormalizedDevServerOptions } from './options';
 import type { DevServerBuilderOutput } from './webpack-server';
 
@@ -169,6 +169,9 @@ async function setupServer(
     serverOptions.workspaceRoot,
     serverOptions.proxyConfig,
   );
+  if (proxy) {
+    normalizeProxyConfiguration(proxy);
+  }
 
   const configuration: InlineConfig = {
     configFile: false,
