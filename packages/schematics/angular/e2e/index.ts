@@ -17,14 +17,9 @@ import {
   strings,
   url,
 } from '@angular-devkit/schematics';
-import {
-  AngularBuilder,
-  DependencyType,
-  ExistingBehavior,
-  addDependency,
-  updateWorkspace,
-} from '@schematics/angular/utility';
+import { AngularBuilder, updateWorkspace } from '@schematics/angular/utility';
 import { posix as path } from 'path';
+import { DependencyType, ExistingBehavior, addDependency } from 'schematics:dependency';
 import { JSONFile } from '../utility/json-file';
 import { latestVersions } from '../utility/latest-versions';
 import { Schema as E2eOptions } from './schema';

@@ -239,5 +239,19 @@ function wrap(
 }
 
 function loadBuiltinModule(id: string): unknown {
+  switch (id) {
+    case 'dependency':
+      return require('@schematics/angular/utility/dependency');
+    case 'angular':
+      const { Builders: AngularBuilder } = require('@schematics/angular/utility/workspace-models');
+
+      return {
+        // Standalone related APIs
+        ...require('@schematics/angular/private/components'),
+        // First-party Angular builder qualified name enum
+        AngularBuilder,
+      };
+  }
+
   return undefined;
 }

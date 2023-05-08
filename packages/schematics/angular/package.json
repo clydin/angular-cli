@@ -10,6 +10,9 @@
   ],
   "exports": {
     "./package.json": "./package.json",
+    "./builtins": {
+      "types": "./builtins.d.ts"
+    },
     "./utility": "./utility/index.js",
     "./utility/*": "./utility/*.js",
     "./migrations/migration-collection.json": "./migrations/migration-collection.json",
