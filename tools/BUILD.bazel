@@ -3,7 +3,7 @@
 # Use of this source code is governed by an MIT-style license that can be
 # found in the LICENSE file at https://angular.io/license
 # @external_begin
-load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
+load("@aspect_rules_js//js:defs.bzl", "js_binary", "js_run_binary")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -11,21 +11,24 @@ exports_files([
     "package_json_release_filter.jq",
 ])
 
-nodejs_binary(
-    name = "ng_cli_schema",
-    data = [
-        "ng_cli_schema_generator.js",
-    ],
+js_binary(
+    name = "ng_cli_schema_bin",
     entry_point = "ng_cli_schema_generator.js",
 )
 
-nodejs_binary(
-    name = "quicktype_runner",
-    data = [
-        "quicktype_runner.js",
-        "@npm//quicktype-core",
-    ],
+js_run_binary(
+    name = "ng_cli_schema",
+    tool = "ng_cli_schema_bin",
+)
+
+js_binary(
+    name = "quicktype_runner_bin",
+    data = ["//:node_modules/quicktype-core"],
     entry_point = "quicktype_runner.js",
-    templated_args = ["--bazel_patch_module_resolver"],
+)
+
+js_run_binary(
+    name = "quicktype_runner",
+    tool = "quicktype_runner_bin",
 )
 # @external_end

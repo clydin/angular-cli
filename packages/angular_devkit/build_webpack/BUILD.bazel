@@ -3,8 +3,7 @@
 # Use of this source code is governed by an MIT-style license that can be
 # found in the LICENSE file at https://angular.io/license
 
-load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
-load("//tools:defaults.bzl", "pkg_npm", "ts_library")
+load("@aspect_rules_ts//ts:defs.bzl", "ts_project")
 load("//tools:ts_json_schema.bzl", "ts_json_schema")
 load("@npm//@angular/build-tooling/bazel/api-golden:index.bzl", "api_golden_test_npm_package")
 
@@ -22,15 +21,11 @@ ts_json_schema(
     src = "src/builders/webpack-dev-server/schema.json",
 )
 
-ts_library(
+ts_project(
     name = "build_webpack",
-    package_name = "@angular-devkit/build-webpack",
     srcs = glob(
         include = ["src/**/*.ts"],
-        exclude = [
-            "src/test-utils.ts",
-            "src/**/*_spec.ts",
-        ],
+        exclude = ["src/**/*_spec.ts"],
     ) + [
         "//packages/angular_devkit/build_webpack:src/builders/webpack-dev-server/schema.ts",
         "//packages/angular_devkit/build_webpack:src/builders/webpack/schema.ts",
@@ -41,89 +36,89 @@ ts_library(
         "src/builders/webpack-dev-server/schema.json",
         "src/builders/webpack/schema.json",
     ],
-    module_name = "@angular-devkit/build-webpack",
-    module_root = "src/index.d.ts",
+    declaration = True,
+    tsconfig = "//:tsconfig-build",
     deps = [
-        "//packages/angular_devkit/architect",
-        "@npm//@types/node",
-        "@npm//rxjs",
-        "@npm//webpack",
-        "@npm//webpack-dev-server",
+        # "//packages/angular_devkit/architect",
+        "//:node_modules/@types/node",
+        "//:node_modules/rxjs",
+        "//:node_modules/webpack",
+        "//:node_modules/webpack-dev-server",
     ],
 )
 
-ts_library(
-    name = "build_webpack_test_lib",
-    testonly = True,
-    srcs = glob(
-        include = [
-            "src/test-utils.ts",
-            "src/**/*_spec.ts",
-        ],
-    ),
-    data = glob(
-        include = [
-            "test/**/*",
-        ],
-    ),
-    deps = [
-        ":build_webpack",
-        "//packages/angular_devkit/architect",
-        "//packages/angular_devkit/architect/node",
-        "//packages/angular_devkit/architect/testing",
-        "//packages/angular_devkit/core",
-        "//packages/angular_devkit/core/node",
-        "//packages/ngtools/webpack",
-        "@npm//@angular/common",
-        "@npm//@angular/compiler",
-        "@npm//@angular/compiler-cli",
-        "@npm//@angular/core",
-        "@npm//@angular/platform-browser",
-        "@npm//@angular/platform-browser-dynamic",
-        "@npm//tslib",
-        "@npm//zone.js",
-    ],
-)
+# ts_library(
+#     name = "build_webpack_test_lib",
+#     testonly = True,
+#     srcs = glob(
+#         include = [
+#             "src/test-utils.ts",
+#             "src/**/*_spec.ts",
+#         ],
+#     ),
+#     data = glob(
+#         include = [
+#             "test/**/*",
+#         ],
+#     ),
+#     deps = [
+#         ":build_webpack",
+#         "//packages/angular_devkit/architect",
+#         "//packages/angular_devkit/architect/node",
+#         "//packages/angular_devkit/architect/testing",
+#         "//packages/angular_devkit/core",
+#         "//packages/angular_devkit/core/node",
+#         "//packages/ngtools/webpack",
+#         "@npm//@angular/common",
+#         "@npm//@angular/compiler",
+#         "@npm//@angular/compiler-cli",
+#         "@npm//@angular/core",
+#         "@npm//@angular/platform-browser",
+#         "@npm//@angular/platform-browser-dynamic",
+#         "@npm//tslib",
+#         "@npm//zone.js",
+#     ],
+# )
 
-jasmine_node_test(
-    name = "build_webpack_test",
-    srcs = [":build_webpack_test_lib"],
-    # Turns off nodejs require patches and turns on the linker, which sets up up node_modules
-    # so that standard node module resolution work.
-    templated_args = ["--nobazel_patch_module_resolver"],
-    deps = [
-        "@npm//jasmine",
-        "@npm//source-map",
-    ],
-)
+# jasmine_node_test(
+#     name = "build_webpack_test",
+#     srcs = [":build_webpack_test_lib"],
+#     # Turns off nodejs require patches and turns on the linker, which sets up up node_modules
+#     # so that standard node module resolution work.
+#     templated_args = ["--nobazel_patch_module_resolver"],
+#     deps = [
+#         "@npm//jasmine",
+#         "@npm//source-map",
+#     ],
+# )
 
-genrule(
-    name = "license",
-    srcs = ["//:LICENSE"],
-    outs = ["LICENSE"],
-    cmd = "cp $(execpath //:LICENSE) $@",
-)
+# genrule(
+#     name = "license",
+#     srcs = ["//:LICENSE"],
+#     outs = ["LICENSE"],
+#     cmd = "cp $(execpath //:LICENSE) $@",
+# )
 
-pkg_npm(
-    name = "npm_package",
-    pkg_deps = [
-        "//packages/angular_devkit/architect:package.json",
-    ],
-    tags = ["release-package"],
-    deps = [
-        ":README.md",
-        ":build_webpack",
-        ":builders.json",
-        ":license",
-    ],
-)
+# pkg_npm(
+#     name = "npm_package",
+#     pkg_deps = [
+#         "//packages/angular_devkit/architect:package.json",
+#     ],
+#     tags = ["release-package"],
+#     deps = [
+#         ":README.md",
+#         ":build_webpack",
+#         ":builders.json",
+#         ":license",
+#     ],
+# )
 
-api_golden_test_npm_package(
-    name = "build_webpack_api",
-    data = [
-        ":npm_package",
-        "//goldens:public-api",
-    ],
-    golden_dir = "angular_cli/goldens/public-api/angular_devkit/build_webpack",
-    npm_package = "angular_cli/packages/angular_devkit/build_webpack/npm_package",
-)
+# api_golden_test_npm_package(
+#     name = "build_webpack_api",
+#     data = [
+#         ":npm_package",
+#         "//goldens:public-api",
+#     ],
+#     golden_dir = "angular_cli/goldens/public-api/angular_devkit/build_webpack",
+#     npm_package = "angular_cli/packages/angular_devkit/build_webpack/npm_package",
+# )

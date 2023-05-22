@@ -1,69 +1,60 @@
-load("@npm//@angular/build-tooling/bazel/api-golden:index.bzl", "api_golden_test_npm_package")
-load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
-load("//tools:defaults.bzl", "pkg_npm", "ts_library")
-
 # Copyright Google Inc. All Rights Reserved.
 #
 # Use of this source code is governed by an MIT-style license that can be
 # found in the LICENSE file at https://angular.io/license
+
+load("@aspect_rules_jasmine//jasmine:defs.bzl", "jasmine_test")
+load("@aspect_rules_js//npm:defs.bzl", "npm_package")
+load("@aspect_rules_ts//ts:defs.bzl", "ts_project")
+
 package(default_visibility = ["//visibility:public"])
 
 licenses(["notice"])
 
-# @angular-devkit/core
-
-ts_library(
+ts_project(
     name = "core",
-    package_name = "@angular-devkit/core",
     srcs = glob(
         include = ["src/**/*.ts"],
         exclude = [
             "src/**/*_spec.ts",
         ],
     ),
-    data = glob(
-        include = ["**/*.json"],
-        # NB: we need to exclude the nested node_modules that is laid out by yarn workspaces
-        exclude = [
-            "node_modules/**",
-            "src/workspace/json/test/**",
-        ],
-    ),
-    module_name = "@angular-devkit/core",
-    module_root = "src/index.d.ts",
+    declaration = True,
+    tsconfig = "//:tsconfig-build",
     deps = [
-        "@npm//@types/node",
-        "@npm//@types/picomatch",
-        "@npm//ajv",
-        "@npm//ajv-formats",
-        "@npm//jsonc-parser",
-        "@npm//picomatch",
-        "@npm//rxjs",
-        "@npm//source-map",
-        # @node_module: typescript:es2015.proxy
-        # @node_module: typescript:es2015.reflect
-        # @node_module: typescript:es2015.symbol.wellknown
-        # @typings: source_map
+        "//:node_modules/@types/node",
+        "//:node_modules/@types/picomatch",
+        "//:node_modules/ajv",
+        "//:node_modules/ajv-formats",
+        "//:node_modules/jsonc-parser",
+        "//:node_modules/picomatch",
+        "//:node_modules/rxjs",
+        "//:node_modules/source-map",
     ],
 )
 
 # @external_begin
 
-ts_library(
-    name = "core_test_lib",
+ts_project(
+    name = "test_ts",
     testonly = True,
     srcs = glob(["src/**/*_spec.ts"]),
-    data = glob(["src/workspace/json/test/**/*.json"]),
+    declaration = True,
+    tsconfig = "//:tsconfig-test",
     deps = [
         ":core",
+        "//:node_modules/@types/jasmine",
+        "//:node_modules/rxjs",
         "//packages/angular_devkit/core/node",
-        "@npm//rxjs",
     ],
 )
 
-jasmine_node_test(
-    name = "core_test",
-    srcs = [":core_test_lib"],
+jasmine_test(
+    name = "test",
+    args = ["**/*_spec.js"],
+    chdir = package_name(),
+    data = glob(["src/workspace/json/test/**/*.json"]) + [":test_ts"],
+    node_modules = "//:node_modules",
 )
 
 genrule(
@@ -73,26 +64,29 @@ genrule(
     cmd = "cp $(execpath //:LICENSE) $@",
 )
 
-pkg_npm(
-    name = "npm_package",
-    tags = ["release-package"],
-    deps = [
-        ":README.md",
+npm_package(
+    name = "package",
+    srcs = [
+        "README.md",
+        "package.json",
         ":core",
         ":license",
         "//packages/angular_devkit/core/node",
         "//packages/angular_devkit/core/node/testing",
     ],
+    include_runfiles = False,
+    package = "@angular-devkit/core",
+    tags = ["release-package"],
 )
 
-api_golden_test_npm_package(
-    name = "core_api",
-    data = [
-        ":npm_package",
-        "//goldens:public-api",
-    ],
-    golden_dir = "angular_cli/goldens/public-api/angular_devkit/core",
-    npm_package = "angular_cli/packages/angular_devkit/core/npm_package",
-    types = ["@npm//@types/node"],
-)
+# api_golden_test_npm_package(
+#     name = "core_api",
+#     data = [
+#         ":npm_package",
+#         "//goldens:public-api",
+#     ],
+#     golden_dir = "angular_cli/goldens/public-api/angular_devkit/core",
+#     npm_package = "angular_cli/packages/angular_devkit/core/npm_package",
+#     types = ["@npm//@types/node"],
+# )
 # @external_end

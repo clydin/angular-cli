@@ -3,12 +3,28 @@
 # Use of this source code is governed by an MIT-style license that can be
 # found in the LICENSE file at https://angular.io/license
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
-load("@build_bazel_rules_nodejs//:index.bzl", "copy_to_bin")
-load("@npm//@bazel/concatjs:index.bzl", "ts_config")
+load("@aspect_bazel_lib//lib:copy_to_bin.bzl", "copy_to_bin")
+load("@npm//:defs.bzl", "npm_link_all_packages")
+load("@aspect_rules_ts//ts:defs.bzl", "ts_config")
 
 package(default_visibility = ["//visibility:public"])
 
 licenses(["notice"])
+
+# Link npm packages
+npm_link_all_packages(name = "node_modules")
+
+ts_config(
+    name = "tsconfig-build",
+    src = "tsconfig-build.json",
+    deps = ["tsconfig.json"],
+)
+
+ts_config(
+    name = "tsconfig-test",
+    src = "tsconfig-test.json",
+    deps = ["tsconfig.json"],
+)
 
 exports_files([
     "LICENSE",
