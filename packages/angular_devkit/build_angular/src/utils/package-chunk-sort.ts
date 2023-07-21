@@ -31,6 +31,7 @@ export function generateEntryPoints(options: {
 
   const entryPoints: EntryPointsType[] = [
     ['runtime', !options.isHMREnabled],
+    ['preload-runtime', true],
     ['polyfills', true],
     ...extraEntryPoints(options.styles, 'styles'),
     ...extraEntryPoints(options.scripts, 'scripts'),

@@ -27,11 +27,12 @@ import {
   transformSupportedBrowsersToTargets,
 } from '../../tools/esbuild/utils';
 import { copyAssets } from '../../utils/copy-assets';
-import { maxWorkers } from '../../utils/environment-options';
+import { includePreloadRuntime, maxWorkers } from '../../utils/environment-options';
 import { prerenderPages } from '../../utils/server-rendering/prerender';
 import { augmentAppWithServiceWorkerEsbuild } from '../../utils/service-worker';
 import { getSupportedBrowsers } from '../../utils/supported-browsers';
 import { NormalizedApplicationBuildOptions } from './options';
+import { generatePreloadRuntime } from './preload-runtime-generator';
 
 // eslint-disable-next-line max-lines-per-function
 export async function executeBuild(
@@ -143,6 +144,23 @@ export async function executeBuild(
   if (optimizationOptions.scripts) {
     const messages = checkCommonJSModules(metafile, options.allowedCommonJsDependencies);
     await logMessages(context, { warnings: messages });
+  }
+
+  if (includePreloadRuntime) {
+    const preloadOutputFile = await generatePreloadRuntime(
+      metafile,
+      initialFiles,
+      optimizationOptions.scripts,
+      options.outputNames.bundles,
+    );
+    if (preloadOutputFile) {
+      executionResult.outputFiles.push(preloadOutputFile);
+      initialFiles.set(preloadOutputFile.path, {
+        entrypoint: true,
+        name: 'preload-runtime',
+        type: 'script',
+      });
+    }
   }
 
   /**

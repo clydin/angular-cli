@@ -96,3 +96,7 @@ export const useLegacySass: boolean = (() => {
 
 const debugPerfVariable = process.env['NG_BUILD_DEBUG_PERF'];
 export const debugPerformance = isPresent(debugPerfVariable) && isEnabled(debugPerfVariable);
+
+const includePreloadRuntimeVar = process.env['NG_BUILD_PRELOAD_RUNTIME'];
+export const includePreloadRuntime =
+  isPresent(includePreloadRuntimeVar) && isEnabled(includePreloadRuntimeVar);
