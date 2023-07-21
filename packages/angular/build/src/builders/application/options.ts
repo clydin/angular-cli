@@ -361,6 +361,7 @@ export async function normalizeOptions(
       output: indexOutput,
       insertionOrder: [
         ['polyfills', true],
+        ['preload-runtime', true],
         ...globalStyles.filter((s) => s.initial).map((s) => [s.name, false]),
         ...globalScripts.filter((s) => s.initial).map((s) => [s.name, false]),
         ['main', true],

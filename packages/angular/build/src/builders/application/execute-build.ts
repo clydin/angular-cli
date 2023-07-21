@@ -25,7 +25,7 @@ import {
   transformSupportedBrowsersToTargets,
 } from '../../tools/esbuild/utils';
 import { BudgetCalculatorResult, checkBudgets } from '../../utils/bundle-calculator';
-import { shouldOptimizeChunks } from '../../utils/environment-options';
+import { includePreloadRuntime, shouldOptimizeChunks } from '../../utils/environment-options';
 import { resolveAssets } from '../../utils/resolve-assets';
 import {
   SERVER_APP_ENGINE_MANIFEST_FILENAME,
@@ -35,6 +35,7 @@ import { getSupportedBrowsers } from '../../utils/supported-browsers';
 import { executePostBundleSteps } from './execute-post-bundle';
 import { inlineI18n, loadActiveTranslations } from './i18n';
 import { NormalizedApplicationBuildOptions } from './options';
+import { generatePreloadRuntime } from './preload-runtime-generator';
 import { createComponentStyleBundler, setupBundlerContexts } from './setup-bundling';
 
 // eslint-disable-next-line max-lines-per-function
@@ -183,6 +184,25 @@ export async function executeBuild(
   const { metafile, initialFiles, outputFiles } = bundlingResult;
 
   executionResult.outputFiles.push(...outputFiles);
+
+  if (includePreloadRuntime) {
+    const preloadOutputFile = await generatePreloadRuntime(
+      metafile,
+      initialFiles,
+      optimizationOptions.scripts,
+      options.outputNames.bundles,
+    );
+    if (preloadOutputFile) {
+      executionResult.outputFiles.push(preloadOutputFile);
+      initialFiles.set(preloadOutputFile.path, {
+        entrypoint: true,
+        name: 'preload-runtime',
+        type: 'script',
+        depth: 0,
+        serverFile: false,
+      });
+    }
+  }
 
   // Analyze files for bundle budget failures if present
   let budgetFailures: BudgetCalculatorResult[] | undefined;

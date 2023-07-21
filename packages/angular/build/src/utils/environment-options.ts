@@ -112,3 +112,7 @@ export const useComponentTemplateHmr =
 const partialSsrBuildVariable = process.env['NG_BUILD_PARTIAL_SSR'];
 export const usePartialSsrBuild =
   isPresent(partialSsrBuildVariable) && isEnabled(partialSsrBuildVariable);
+
+const includePreloadRuntimeVar = process.env['NG_BUILD_PRELOAD_RUNTIME'];
+export const includePreloadRuntime =
+  isPresent(includePreloadRuntimeVar) && isEnabled(includePreloadRuntimeVar);
