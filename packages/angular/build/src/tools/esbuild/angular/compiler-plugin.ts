@@ -450,6 +450,7 @@ export function createCompilerPlugin(
             true /* skipLinker */,
             sideEffects,
             instrumentForCoverage,
+            true /* skipWebWorker */,
           );
 
           // Store as the returned Uint8Array to allow caching the fully transformed code

@@ -20,6 +20,7 @@ interface JavaScriptTransformRequest {
   advancedOptimizations: boolean;
   skipLinker?: boolean;
   sideEffects?: boolean;
+  needsWorkerTransform?: boolean;
   jit: boolean;
   instrumentForCoverage?: boolean;
 }
@@ -56,6 +57,7 @@ async function transformWithBabel(
   data: string,
   options: Omit<JavaScriptTransformRequest, 'filename' | 'data'>,
 ): Promise<string> {
+  const needsWorkerTransform = options.needsWorkerTransform ?? data.includes('Worker');
   const shouldLink = !options.skipLinker && (await requiresLinking(filename, data));
   const useInputSourcemap =
     options.sourcemap &&
@@ -90,6 +92,10 @@ async function transformWithBabel(
       adjustStaticMembers,
       { wrapDecorators: sideEffectFree },
     ]);
+  }
+
+  if (needsWorkerTransform) {
+    plugins.push(await import('../babel/plugins/process-web-workers'));
   }
 
   // If no additional transformations are needed, return the data directly

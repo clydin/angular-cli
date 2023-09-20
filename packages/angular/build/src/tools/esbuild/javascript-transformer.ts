@@ -153,18 +153,26 @@ export class JavaScriptTransformer {
     skipLinker: boolean,
     sideEffects?: boolean,
     instrumentForCoverage?: boolean,
+    skipWebWorker?: boolean,
   ): Promise<Uint8Array> {
     // Perform a quick test to determine if the data needs any transformations.
     // This allows directly returning the data without the worker communication overhead.
+    let needsWorkerTransform: boolean | undefined;
     if (skipLinker && !this.#commonOptions.advancedOptimizations && !instrumentForCoverage) {
-      const keepSourcemap =
-        this.#commonOptions.sourcemap &&
-        (!!this.#commonOptions.thirdPartySourcemaps || !/[\\/]node_modules[\\/]/.test(filename));
+      // This checks for Worker/SharedWorker usage in each file.
+      needsWorkerTransform = !skipWebWorker && data.includes('Worker');
 
-      return Buffer.from(
-        keepSourcemap ? data : data.replace(/^\/\/# sourceMappingURL=[^\r\n]*/gm, ''),
-        'utf-8',
-      );
+      // If not found, no transformations are needed
+      if (!needsWorkerTransform) {
+        const keepSourcemap =
+          this.#commonOptions.sourcemap &&
+          (!!this.#commonOptions.thirdPartySourcemaps || !/[\\/]node_modules[\\/]/.test(filename));
+
+        return Buffer.from(
+          keepSourcemap ? data : data.replace(/^\/\/# sourceMappingURL=[^\r\n]*/gm, ''),
+          'utf-8',
+        );
+      }
     }
 
     return this.#ensureWorkerPool().run({
@@ -173,6 +181,7 @@ export class JavaScriptTransformer {
       skipLinker,
       sideEffects,
       instrumentForCoverage,
+      needsWorkerTransform,
       ...this.#commonOptions,
     });
   }
