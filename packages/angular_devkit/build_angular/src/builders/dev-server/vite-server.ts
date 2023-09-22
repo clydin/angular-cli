@@ -444,7 +444,7 @@ export async function setupServer(
     publicDir: false,
     esbuild: false,
     mode: 'development',
-    appType: 'spa',
+    appType: 'custom',
     css: {
       devSourcemap: true,
     },
@@ -457,7 +457,7 @@ export async function setupServer(
       port: serverOptions.port,
       strictPort: true,
       host: serverOptions.host,
-      open: serverOptions.open,
+      open: serverOptions.open && (serverOptions.servePath ?? '/'),
       headers: serverOptions.headers,
       proxy,
       // File watching is handled by the build directly. `null` disables file watching for Vite.
@@ -553,6 +553,7 @@ export async function setupServer(
             map: mapContents && Buffer.from(mapContents).toString('utf-8'),
           };
         },
+        // eslint-disable-next-line max-lines-per-function
         configureServer(server) {
           const originalssrTransform = server.ssrTransform;
           server.ssrTransform = async (code, map, url, originalCode) => {
@@ -629,6 +630,8 @@ export async function setupServer(
           // Returning a function, installs middleware after the main transform middleware but
           // before the built-in HTML middleware
           return () => {
+            // TODO: Add fallback middleware
+
             function angularSSRMiddleware(
               req: Connect.IncomingMessage,
               res: ServerResponse,
@@ -689,10 +692,13 @@ export async function setupServer(
 
               // Parse the incoming request.
               // The base of the URL is unused but required to parse the URL.
-              const pathname = pathnameWithoutServePath(req.url, serverOptions);
+              let pathname = pathnameWithoutServePath(req.url, serverOptions);
+              if (pathname.endsWith('/')) {
+                pathname += 'index.html';
+              }
 
-              if (pathname === '/' || pathname === `/index.html`) {
-                const rawHtml = outputFiles.get('/index.html')?.contents;
+              if (pathname.endsWith('.html')) {
+                const rawHtml = outputFiles.get(pathname)?.contents;
                 if (rawHtml) {
                   transformIndexHtmlAndAddHeaders(
                     req.url,
@@ -707,6 +713,12 @@ export async function setupServer(
               }
 
               next();
+            });
+
+            // Return a not found (404) status if the request does not match any files
+            server.middlewares.use(function angular404Middleware(_, res) {
+              res.statusCode = 404;
+              res.end();
             });
           };
 
