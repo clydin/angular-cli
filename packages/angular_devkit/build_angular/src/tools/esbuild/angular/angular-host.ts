@@ -62,6 +62,14 @@ export function createAngularCompilerHost(
       return null;
     }
 
+    // Skip transforming empty content.
+    // NOTE: This currently works for both inline and external because the AOT compiler
+    // reads external files even though they are not used by the build system. If this
+    // changes, an additional check would be needed for external files.
+    if (data?.trim().length === 0) {
+      return null;
+    }
+
     const result = await hostOptions.transformStylesheet(
       data,
       context.containingFile,
