@@ -397,6 +397,7 @@
     },
     "index": {
       "description": "Configures the generation of the application's HTML index.",
+      "default": "src/index.html",
       "oneOf": [
         {
           "type": "string",
@@ -409,6 +410,7 @@
             "input": {
               "type": "string",
               "minLength": 1,
+              "default": "src/index.html",
               "description": "The path of a file to use for the application's generated HTML index."
             },
             "output": {
@@ -422,8 +424,7 @@
               "default": true,
               "description": "Generates 'preload', 'modulepreload', and 'preconnect' link elements for initial application files and resources."
             }
-          },
-          "required": ["input"]
+          }
         },
         {
           "const": false,
@@ -515,7 +516,7 @@
     }
   },
   "additionalProperties": false,
-  "required": ["outputPath", "index", "browser", "tsConfig"],
+  "required": ["outputPath", "browser", "tsConfig"],
   "definitions": {
     "assetPattern": {
       "oneOf": [
