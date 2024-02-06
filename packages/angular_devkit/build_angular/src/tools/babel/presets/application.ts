@@ -254,6 +254,7 @@ export default function (api: unknown, options: ApplicationPresetOptions) {
 
     plugins.push(
       require('../plugins/elide-angular-metadata').default,
+      require('../plugins/elide-angular-debug-names').default,
       [require('../plugins/adjust-typescript-enums').default, { loose: true }],
       [
         require('../plugins/adjust-static-class-members').default,
