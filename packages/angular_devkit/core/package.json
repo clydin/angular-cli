@@ -32,6 +32,10 @@
     "rxjs": "7.8.1",
     "source-map": "0.7.4"
   },
+  "devDependencies": {
+    "@types/node": "^18.13.0",
+    "@types/picomatch": "2.3.3"
+  },
   "peerDependencies": {
     "chokidar": "^3.5.2"
   },

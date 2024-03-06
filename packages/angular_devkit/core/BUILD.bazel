@@ -1,6 +1,9 @@
 load("@npm//@angular/build-tooling/bazel/api-golden:index.bzl", "api_golden_test_npm_package")
-load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
-load("//tools:defaults.bzl", "pkg_npm", "ts_library")
+load("@aspect_rules_js//npm:defs.bzl", "npm_package", "stamped_package_json")
+load("@npm_rjs//:defs.bzl", "npm_link_all_packages")
+load("@aspect_rules_jasmine//jasmine:defs.bzl", "jasmine_test")
+load("@aspect_rules_ts//ts:defs.bzl", "ts_project")
+load("@rules_js_to_rules_nodejs_adapter//file:defs.bzl", "rules_js_to_rules_nodejs_adapter")
 
 # Copyright Google Inc. All Rights Reserved.
 #
@@ -10,60 +13,61 @@ package(default_visibility = ["//visibility:public"])
 
 licenses(["notice"])
 
-# @angular-devkit/core
+npm_link_all_packages(name = "node_modules")
 
-ts_library(
-    name = "core",
-    package_name = "@angular-devkit/core",
+stamped_package_json(
+    name = "package",
+    stamp_var = "STABLE_BUILD_VERSION",
+)
+
+ts_project(
+    name = "core_ts",
     srcs = glob(
         include = ["src/**/*.ts"],
         exclude = [
             "src/**/*_spec.ts",
         ],
     ),
-    data = glob(
-        include = ["**/*.json"],
-        # NB: we need to exclude the nested node_modules that is laid out by yarn workspaces
-        exclude = [
-            "node_modules/**",
-            "src/workspace/json/test/**",
-        ],
-    ),
-    module_name = "@angular-devkit/core",
-    module_root = "src/index.d.ts",
+    declaration = True,
+    tsconfig = "//packages:tsconfig-packages",
     deps = [
-        "@npm//@types/node",
-        "@npm//@types/picomatch",
-        "@npm//ajv",
-        "@npm//ajv-formats",
-        "@npm//jsonc-parser",
-        "@npm//picomatch",
-        "@npm//rxjs",
-        "@npm//source-map",
-        # @node_module: typescript:es2015.proxy
-        # @node_module: typescript:es2015.reflect
-        # @node_module: typescript:es2015.symbol.wellknown
-        # @typings: source_map
+        ":node_modules/@types/node",
+        ":node_modules/@types/picomatch",
+        ":node_modules/ajv",
+        ":node_modules/ajv-formats",
+        ":node_modules/jsonc-parser",
+        ":node_modules/picomatch",
+        ":node_modules/rxjs",
+        ":node_modules/source-map",
     ],
 )
 
-# @external_begin
+rules_js_to_rules_nodejs_adapter(
+    name = "core_rnjs",
+    package_name = "@angular-devkit/core",
+    deps = [":core_ts"],
+)
 
-ts_library(
-    name = "core_test_lib",
+ts_project(
+    name = "test_ts",
     testonly = True,
     srcs = glob(["src/**/*_spec.ts"]),
-    data = glob(["src/workspace/json/test/**/*.json"]),
+    declaration = True,
+    tsconfig = "//:tsconfig-test",
     deps = [
-        ":core",
+        ":core_ts",
+        ":node_modules/@types/jasmine",
+        ":node_modules/rxjs",
         "//packages/angular_devkit/core/node",
-        "@npm//rxjs",
     ],
 )
 
-jasmine_node_test(
-    name = "core_test",
-    srcs = [":core_test_lib"],
+jasmine_test(
+    name = "test",
+    args = ["**/*_spec.js"],
+    chdir = package_name(),
+    data = glob(["src/workspace/json/test/**/*.json"]) + [":test_ts"],
+    node_modules = ":node_modules",
 )
 
 genrule(
@@ -73,26 +77,26 @@ genrule(
     cmd = "cp $(execpath //:LICENSE) $@",
 )
 
-pkg_npm(
-    name = "npm_package",
-    tags = ["release-package"],
-    deps = [
+npm_package(
+    name = "core",
+    srcs = [
         ":README.md",
-        ":core",
+        ":core_ts",
         ":license",
+        ":package",
         "//packages/angular_devkit/core/node",
         "//packages/angular_devkit/core/node/testing",
     ],
+    tags = ["release-package"],
 )
 
 api_golden_test_npm_package(
     name = "core_api",
     data = [
-        ":npm_package",
+        ":core",
         "//goldens:public-api",
     ],
     golden_dir = "angular_cli/goldens/public-api/angular_devkit/core",
-    npm_package = "angular_cli/packages/angular_devkit/core/npm_package",
+    npm_package = "angular_cli/packages/angular_devkit/core/core",
     types = ["@npm//@types/node"],
 )
-# @external_end

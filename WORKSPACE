@@ -1,9 +1,8 @@
 workspace(
     name = "angular_cli",
-    managed_directories = {"@npm": ["node_modules"]},
 )
 
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
 
 http_archive(
     name = "bazel_skylib",
@@ -101,9 +100,9 @@ yarn_install(
 
 http_archive(
     name = "aspect_bazel_lib",
-    sha256 = "9a51150a25ba13e0301b47bbe731aef537330dcc222dc598ebdfe18d2efe2f33",
-    strip_prefix = "bazel-lib-1.34.5",
-    url = "https://github.com/aspect-build/bazel-lib/archive/v1.34.5.tar.gz",
+    sha256 = "f2c1f91cc0a55f7a44c94b8a79974f21349b844075740c01045acaa49e731307",
+    strip_prefix = "bazel-lib-1.40.3",
+    url = "https://github.com/aspect-build/bazel-lib/releases/download/v1.40.3/bazel-lib-v1.40.3.tar.gz",
 )
 
 load("@aspect_bazel_lib//lib:repositories.bzl", "aspect_bazel_lib_dependencies", "register_jq_toolchains")
@@ -122,3 +121,67 @@ register_toolchains(
 load("@npm//@angular/build-tooling/bazel/browsers:browser_repositories.bzl", "browser_repositories")
 
 browser_repositories()
+
+# rules_js tooling
+# This will be incrementally adopted for packages.
+
+http_archive(
+    name = "aspect_rules_js",
+    sha256 = "edc7b0255114fafdbbd593ea5d5fdfd54b2a603f33b3a49518910ac618e1bf2b",
+    strip_prefix = "rules_js-1.38.0",
+    url = "https://github.com/aspect-build/rules_js/releases/download/v1.38.0/rules_js-v1.38.0.tar.gz",
+)
+
+http_archive(
+    name = "aspect_rules_ts",
+    sha256 = "c77f0dfa78c407893806491223c1264c289074feefbf706721743a3556fa7cea",
+    strip_prefix = "rules_ts-2.2.0",
+    url = "https://github.com/aspect-build/rules_ts/releases/download/v2.2.0/rules_ts-v2.2.0.tar.gz",
+)
+
+http_archive(
+    name = "aspect_rules_jasmine",
+    sha256 = "4c16ef202d1e53fd880e8ecc9e0796802201ea9c89fa32f52d5d633fff858cac",
+    strip_prefix = "rules_jasmine-1.1.1",
+    url = "https://github.com/aspect-build/rules_jasmine/releases/download/v1.1.1/rules_jasmine-v1.1.1.tar.gz",
+)
+
+load("@aspect_rules_js//js:repositories.bzl", "rules_js_dependencies")
+load("@aspect_rules_ts//ts:repositories.bzl", "rules_ts_dependencies")
+load("@aspect_rules_jasmine//jasmine:dependencies.bzl", "rules_jasmine_dependencies")
+
+rules_js_dependencies()
+
+rules_ts_dependencies(
+    ts_integrity = "sha512-+2/g0Fds1ERlP6JsakQQDXjZdZMM+rqpamFZJEKh4kwTIn3iDkgKtby0CeNd5ATNZ4Ry1ax15TMx0W2V+miizQ==",
+    ts_version_from = "//:package.json",
+)
+
+rules_jasmine_dependencies()
+
+nodejs_register_toolchains(
+    name = "nodejs_rjs",
+    node_version = "20.9.0",
+)
+
+load("@aspect_rules_js//npm:npm_import.bzl", "npm_translate_lock")
+
+npm_translate_lock(
+    name = "npm_rjs",
+    npmrc = "//:.npmrc",
+    pnpm_lock = "//packages:pnpm-lock.yaml",
+    verify_node_modules_ignored = "//:.bazelignore",
+)
+
+load("@npm_rjs//:repositories.bzl", "npm_repositories")
+
+npm_repositories()
+
+http_file(
+    name = "rules_js_to_rules_nodejs_adapter",
+    downloaded_file_path = "defs.bzl",
+    sha256 = "fed5f963d02e913978a76a5fd9ecbd082c54dedbd3cbf12607bce6c91be989ff",
+    urls = [
+        "https://raw.githubusercontent.com/aspect-build/bazel-examples/1b8be767c587bc1187efa283af515f4c78e78b86/rules_nodejs_to_rules_js_migration/bazel/rules_js_to_rules_nodejs_adapter.bzl",
+    ],
+)

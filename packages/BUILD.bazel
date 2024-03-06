@@ -1,0 +1,15 @@
+load("@npm_rjs//:defs.bzl", "npm_link_all_packages")
+load("@aspect_rules_ts//ts:defs.bzl", "ts_config")
+
+package(default_visibility = ["//visibility:public"])
+
+npm_link_all_packages(name = "node_modules")
+
+ts_config(
+    name = "tsconfig-packages",
+    src = "tsconfig-packages.json",
+    deps = [
+        ":node_modules/@types/node",
+        "//:tsconfig-root",
+    ],
+)

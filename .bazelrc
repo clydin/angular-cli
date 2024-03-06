@@ -167,6 +167,19 @@ build:remote-cache --google_default_credentials
 # Fixes use of npm paths with spaces such as some within the puppeteer module
 build --experimental_inprocess_symlink_creation
 
+###############################
+# TypeScript rules settings
+# These settings are required for rules_ts
+###############################
+
+# honor the setting of `skipLibCheck` in the tsconfig.json file
+build --@aspect_rules_ts//ts:skipLibCheck=honor_tsconfig
+fetch --@aspect_rules_ts//ts:skipLibCheck=honor_tsconfig
+
+# Use "tsc" as the transpiler when ts_project has no `transpiler` set.
+build --@aspect_rules_ts//ts:default_to_tsc_transpiler
+fetch --@aspect_rules_ts//ts:default_to_tsc_transpiler
+
 ####################################################
 # User bazel configuration
 # NOTE: This needs to be the *last* entry in the config.

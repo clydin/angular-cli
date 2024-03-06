@@ -22,7 +22,7 @@ ts_library(
     module_name = "@angular-devkit/core/node",
     module_root = "index.d.ts",
     deps = [
-        "//packages/angular_devkit/core",
+        "//packages/angular_devkit/core:core_rnjs",
         "@npm//@types/node",
         "@npm//chokidar",
         "@npm//rxjs",
@@ -44,7 +44,7 @@ ts_library(
     ),
     deps = [
         ":node",
-        "//packages/angular_devkit/core",
+        "//packages/angular_devkit/core:core_rnjs",
         "@npm//rxjs",
     ],
 )

@@ -1,0 +1,2 @@
+packages:
+  - './angular_devkit/core'

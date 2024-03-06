@@ -1,0 +1,7 @@
+{
+  "description": "rules_js transition dependencies",
+  "private": true,
+  "devDependencies": {
+    "@types/node": "^18.13.0"
+  }
+}
