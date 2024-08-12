@@ -143,6 +143,7 @@ export async function* serveWithVite(
     implicitServer: [],
     explicit: [],
   };
+  const usedComponentStyles = new Map<string, string[]>();
 
   // Add cleanup logic via a builder teardown.
   let deferred: () => void;
@@ -255,7 +256,14 @@ export async function* serveWithVite(
         ...new Set([...server.config.server.fs.allow, ...assetFiles.values()]),
       ];
 
-      handleUpdate(normalizePath, generatedFiles, server, serverOptions, context.logger);
+      handleUpdate(
+        normalizePath,
+        generatedFiles,
+        server,
+        serverOptions,
+        context.logger,
+        usedComponentStyles,
+      );
 
       if (requiresServerRestart) {
         // Restart the server to force SSR dep re-optimization when a dependency has been added.
@@ -300,6 +308,7 @@ export async function* serveWithVite(
         prebundleTransformer,
         target,
         isZonelessApp(polyfills),
+        usedComponentStyles,
         browserOptions.loader as EsbuildLoaderOption | undefined,
         extensions?.middleware,
         transformers?.indexHtml,
@@ -357,6 +366,7 @@ function handleUpdate(
   server: ViteDevServer,
   serverOptions: NormalizedDevServerOptions,
   logger: BuilderContext['logger'],
+  usedComponentStyles: Map<string, string[]>,
 ): void {
   const updatedFiles: string[] = [];
 
@@ -380,7 +390,17 @@ function handleUpdate(
       const timestamp = Date.now();
       server.hot.send({
         type: 'update',
-        updates: updatedFiles.map((filePath) => {
+        updates: updatedFiles.flatMap((filePath) => {
+          const componentIds = usedComponentStyles.get(filePath);
+          if (componentIds) {
+            return componentIds.map((id) => ({
+              type: 'css-update',
+              timestamp,
+              path: `${filePath}?component` + (id ? `=${id}` : ''),
+              acceptedPath: filePath,
+            }));
+          }
+
           return {
             type: 'css-update',
             timestamp,
@@ -483,6 +503,7 @@ export async function setupServer(
   prebundleTransformer: JavaScriptTransformer,
   target: string[],
   zoneless: boolean,
+  usedComponentStyles: Map<string, string[]>,
   prebundleLoaderExtensions: EsbuildLoaderOption | undefined,
   extensionMiddleware?: Connect.NextHandleFunction[],
   indexHtmlTransformer?: (content: string) => Promise<string>,
@@ -591,6 +612,7 @@ export async function setupServer(
         indexHtmlTransformer,
         extensionMiddleware,
         normalizePath,
+        usedComponentStyles,
       }),
       createRemoveIdPrefixPlugin(externalMetadata.explicit),
     ],
