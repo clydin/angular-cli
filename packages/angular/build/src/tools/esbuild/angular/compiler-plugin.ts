@@ -47,6 +47,7 @@ export interface CompilerPluginOptions {
   sourceFileCache?: SourceFileCache;
   loadResultCache?: LoadResultCache;
   incremental: boolean;
+  externalStyles?: boolean;
 }
 
 // eslint-disable-next-line max-lines-per-function
@@ -127,6 +128,7 @@ export function createCompilerPlugin(
       const stylesheetBundler = new ComponentStylesheetBundler(
         styleOptions,
         pluginOptions.incremental,
+        pluginOptions.externalStyles ?? false,
       );
       let sharedTSCompilationState: SharedTSCompilationState | undefined;
 
@@ -570,6 +572,7 @@ function createCompilerOptionsTransformer(
       mapRoot: undefined,
       sourceRoot: undefined,
       preserveSymlinks,
+      externalStyles: pluginOptions.externalStyles,
     };
   };
 }

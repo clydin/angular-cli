@@ -7,6 +7,7 @@
  */
 
 import { NormalizedApplicationBuildOptions } from '../../builders/application/options';
+import { useComponentStyleHmr } from '../../utils/environment-options';
 import type { createCompilerPlugin } from './angular/compiler-plugin';
 import type { SourceFileCache } from './angular/source-file-cache';
 
@@ -51,6 +52,7 @@ export function createCompilerPluginOptions(
       sourceFileCache,
       loadResultCache: sourceFileCache?.loadResultCache,
       incremental: !!options.watch,
+      externalStyles: useComponentStyleHmr,
     },
     // Component stylesheet options
     styleOptions: {

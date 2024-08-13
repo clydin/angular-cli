@@ -7,7 +7,7 @@
  */
 
 import { OutputFile } from 'esbuild';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { BuildOutputFileType, BundleContextResult, BundlerContext } from '../bundler-context';
 import { MemoryCache } from '../cache';
@@ -33,13 +33,17 @@ export class ComponentStylesheetBundler {
   constructor(
     private readonly options: BundleStylesheetOptions,
     private readonly incremental: boolean,
+    private readonly external: boolean,
   ) {}
 
   async bundleFile(entry: string) {
     const bundlerContext = await this.#fileContexts.getOrCreate(entry, () => {
       return new BundlerContext(this.options.workspaceRoot, this.incremental, (loadCache) => {
         const buildOptions = createStylesheetBundleOptions(this.options, loadCache);
-        buildOptions.entryPoints = [entry];
+        buildOptions.entryPoints = { [randomUUID()]: entry };
+        if (this.external) {
+          delete buildOptions.publicPath;
+        }
 
         return buildOptions;
       });
@@ -62,7 +66,10 @@ export class ComponentStylesheetBundler {
         const buildOptions = createStylesheetBundleOptions(this.options, loadCache, {
           [entry]: data,
         });
-        buildOptions.entryPoints = [`${namespace};${entry}`];
+        if (this.external) {
+          delete buildOptions.publicPath;
+        }
+        buildOptions.entryPoints = { [randomUUID()]: `${namespace};${entry}` };
         buildOptions.plugins.push({
           name: 'angular-component-styles',
           setup(build) {
@@ -140,7 +147,14 @@ export class ComponentStylesheetBundler {
 
           outputFiles.push(clonedOutputFile);
         } else if (filename.endsWith('.css')) {
-          contents = outputFile.text;
+          if (this.external) {
+            const clonedOutputFile = outputFile.clone();
+            clonedOutputFile.path = path.join(this.options.workspaceRoot, outputFile.path);
+            outputFiles.push(clonedOutputFile);
+            contents = path.posix.join(this.options.publicPath ?? '', filename);
+          } else {
+            contents = outputFile.text;
+          }
         } else {
           throw new Error(
             `Unexpected non CSS/Media file "${filename}" outputted during component stylesheet processing.`,
