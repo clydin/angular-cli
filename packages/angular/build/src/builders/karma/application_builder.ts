@@ -6,7 +6,6 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import { BuildOutputFileType } from '@angular/build';
 import {
   ApplicationBuilderInternalOptions,
   Result,
@@ -14,20 +13,18 @@ import {
   ResultKind,
   buildApplicationInternal,
   emitFilesToDisk,
-  findTests,
-  getTestEntrypoints,
 } from '@angular/build/private';
-import { BuilderContext, BuilderOutput } from '@angular-devkit/architect';
-import { randomUUID } from 'crypto';
+import type { BuilderContext, BuilderOutput } from '@angular-devkit/architect';
 import glob from 'fast-glob';
-import * as fs from 'fs/promises';
-import { IncomingMessage, ServerResponse } from 'http';
-import type { Config, ConfigOptions, FilePattern, InlinePluginDef } from 'karma';
-import * as path from 'path';
-import { Observable, Subscriber, catchError, defaultIfEmpty, from, of, switchMap } from 'rxjs';
-import { Configuration } from 'webpack';
-import { ExecutionTransformer } from '../../transforms';
-import { OutputHashing } from '../browser-esbuild/schema';
+import type { Config, ConfigOptions, FilePattern, InlinePluginDef, Server } from 'karma';
+import { randomUUID } from 'node:crypto';
+import * as fs from 'node:fs/promises';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import * as path from 'node:path';
+import { ReadableStreamController } from 'node:stream/web';
+import { BuildOutputFileType } from '../../tools/esbuild/bundler-context';
+import { OutputHashing } from '../application/schema';
+import { findTests, getTestEntrypoints } from './find-tests';
 import { Schema as KarmaBuilderOptions } from './schema';
 
 interface BuildOptions extends ApplicationBuilderInternalOptions {
@@ -171,7 +168,7 @@ function injectKarmaReporter(
   buildOptions: BuildOptions,
   buildIterator: AsyncIterator<Result>,
   karmaConfig: Config & ConfigOptions,
-  subscriber: Subscriber<BuilderOutput>,
+  controller: ReadableStreamController<BuilderOutput>,
 ) {
   const reporterName = 'angular-progress-notifier';
 
@@ -205,7 +202,7 @@ function injectKarmaReporter(
           }
 
           if (buildOutput.kind === ResultKind.Failure) {
-            subscriber.next({ success: false, message: 'Build failed' });
+            controller.enqueue({ success: false, message: 'Build failed' });
           } else if (
             buildOutput.kind === ResultKind.Incremental ||
             buildOutput.kind === ResultKind.Full
@@ -227,9 +224,9 @@ function injectKarmaReporter(
 
     onRunComplete = function (_browsers: unknown, results: RunCompleteInfo) {
       if (results.exitCode === 0) {
-        subscriber.next({ success: true });
+        controller.enqueue({ success: true });
       } else {
-        subscriber.next({ success: false });
+        controller.enqueue({ success: false });
       }
     };
   }
@@ -255,44 +252,48 @@ export function execute(
   context: BuilderContext,
   karmaOptions: ConfigOptions,
   transforms: {
-    webpackConfiguration?: ExecutionTransformer<Configuration>;
     // The karma options transform cannot be async without a refactor of the builder implementation
     karmaOptions?: (options: ConfigOptions) => ConfigOptions;
   } = {},
-): Observable<BuilderOutput> {
-  return from(initializeApplication(options, context, karmaOptions, transforms)).pipe(
-    switchMap(
-      ([karma, karmaConfig, buildOptions, buildIterator]) =>
-        new Observable<BuilderOutput>((subscriber) => {
-          // If `--watch` is explicitly enabled or if we are keeping the Karma
-          // process running, we should hook Karma into the build.
-          if (buildIterator) {
-            injectKarmaReporter(buildOptions, buildIterator, karmaConfig, subscriber);
-          }
+): ReadableStream<BuilderOutput> {
+  let karmaServer: Server;
 
-          // Complete the observable once the Karma server returns.
-          const karmaServer = new karma.Server(karmaConfig as Config, (exitCode) => {
-            subscriber.next({ success: exitCode === 0 });
-            subscriber.complete();
-          });
+  return new ReadableStream({
+    async start(controller) {
+      let init;
+      try {
+        init = await initializeApplication(options, context, karmaOptions, transforms);
+      } catch (err) {
+        if (err instanceof ApplicationBuildError) {
+          controller.enqueue({ success: false, message: err.message });
+          controller.close();
 
-          const karmaStart = karmaServer.start();
+          return;
+        }
 
-          // Cleanup, signal Karma to exit.
-          return () => {
-            void karmaStart.then(() => karmaServer.stop());
-          };
-        }),
-    ),
-    catchError((err) => {
-      if (err instanceof ApplicationBuildError) {
-        return of({ success: false, message: err.message });
+        throw err;
       }
 
-      throw err;
-    }),
-    defaultIfEmpty({ success: false }),
-  );
+      const [karma, karmaConfig, buildOptions, buildIterator] = init;
+
+      // If `--watch` is explicitly enabled or if we are keeping the Karma
+      // process running, we should hook Karma into the build.
+      if (buildIterator) {
+        injectKarmaReporter(buildOptions, buildIterator, karmaConfig, controller);
+      }
+
+      // Close the stream once the Karma server returns.
+      karmaServer = new karma.Server(karmaConfig as Config, (exitCode) => {
+        controller.enqueue({ success: exitCode === 0 });
+        controller.close();
+      });
+
+      await karmaServer.start();
+    },
+    async cancel() {
+      await karmaServer?.stop();
+    },
+  });
 }
 
 async function getProjectSourceRoot(context: BuilderContext): Promise<string> {
@@ -315,10 +316,9 @@ function normalizePolyfills(polyfills: string | string[] | undefined): [string[]
     polyfills = [];
   }
 
-  const jasmineGlobalEntryPoint =
-    '@angular-devkit/build-angular/src/builders/karma/jasmine_global.js';
+  const jasmineGlobalEntryPoint = '@angular/build/private/polyfills/jasmine_global.js';
   const jasmineGlobalCleanupEntrypoint =
-    '@angular-devkit/build-angular/src/builders/karma/jasmine_global_cleanup.js';
+    '@angular/build/private/polyfills/jasmine_global_cleanup.js';
 
   const zoneTestingEntryPoint = 'zone.js/testing';
   const polyfillsExludingZoneTesting = polyfills.filter((p) => p !== zoneTestingEntryPoint);
@@ -352,18 +352,11 @@ async function initializeApplication(
   context: BuilderContext,
   karmaOptions: ConfigOptions,
   transforms: {
-    webpackConfiguration?: ExecutionTransformer<Configuration>;
     karmaOptions?: (options: ConfigOptions) => ConfigOptions;
   } = {},
 ): Promise<
   [typeof import('karma'), Config & ConfigOptions, BuildOptions, AsyncIterator<Result> | null]
 > {
-  if (transforms.webpackConfiguration) {
-    context.logger.warn(
-      `This build is using the application builder but transforms.webpackConfiguration was provided. The transform will be ignored.`,
-    );
-  }
-
   const outputPath = path.join(context.workspaceRoot, 'dist/test-out', randomUUID());
   const projectSourceRoot = await getProjectSourceRoot(context);
 
@@ -377,7 +370,7 @@ async function initializeApplication(
   if (options.main) {
     entryPoints.set(mainName, options.main);
   } else {
-    entryPoints.set(mainName, '@angular-devkit/build-angular/src/builders/karma/init_test_bed.js');
+    entryPoints.set(mainName, '@angular/build/private/polyfills/init_test_bed.js');
   }
 
   const instrumentForCoverage = options.codeCoverage

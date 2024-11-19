@@ -82,3 +82,4 @@ export { augmentAppWithServiceWorker } from './utils/service-worker';
 export { type BundleStats, generateBuildStatsTable } from './utils/stats-table';
 export { getSupportedBrowsers } from './utils/supported-browsers';
 export { assertCompatibleAngularVersion } from './utils/version';
+export { findTests, getTestEntrypoints } from './builders/karma/find-tests';
