@@ -20,6 +20,7 @@ import * as path from 'path';
 import { Observable, from, mergeMap } from 'rxjs';
 import { Configuration } from 'webpack';
 import { ExecutionTransformer } from '../../transforms';
+import { normalizeFileReplacements } from '../../utils';
 import { BuilderMode, Schema as KarmaBuilderOptions } from './schema';
 
 export type KarmaConfigOptions = ConfigOptions & {
@@ -46,7 +47,18 @@ export function execute(
     mergeMap(([useEsbuild, executeWithBuilder]) => {
       const karmaOptions = getBaseKarmaOptions(options, context, useEsbuild);
 
-      return executeWithBuilder.execute(options, context, karmaOptions, transforms);
+      if (useEsbuild && transforms.webpackConfiguration) {
+        context.logger.warn(
+          `This build is using the application builder but transforms.webpackConfiguration was provided. The transform will be ignored.`,
+        );
+      }
+
+      if (useEsbuild && options.fileReplacements) {
+        options.fileReplacements = normalizeFileReplacements(options.fileReplacements, './');
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return executeWithBuilder(options as any, context, karmaOptions, transforms);
     }),
   );
 }
@@ -155,13 +167,26 @@ export default createBuilder<Record<string, string> & KarmaBuilderOptions>(execu
 async function getExecuteWithBuilder(
   options: KarmaBuilderOptions,
   context: BuilderContext,
-): Promise<[boolean, typeof import('./application_builder') | typeof import('./browser_builder')]> {
+): Promise<
+  [
+    boolean,
+    (
+      | (typeof import('@angular/build/private'))['executeKarmaInternal']
+      | (typeof import('./browser_builder'))['execute']
+    ),
+  ]
+> {
   const useEsbuild = await checkForEsbuild(options, context);
-  const executeWithBuilderModule = useEsbuild
-    ? import('./application_builder')
-    : import('./browser_builder');
+  let execute;
+  if (useEsbuild) {
+    const { executeKarmaInternal } = await import('@angular/build/private');
+    execute = executeKarmaInternal;
+  } else {
+    const browserBuilderModule = await import('./browser_builder');
+    execute = browserBuilderModule.execute;
+  }
 
-  return [useEsbuild, await executeWithBuilderModule];
+  return [useEsbuild, execute];
 }
 
 async function checkForEsbuild(
