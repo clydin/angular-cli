@@ -4,7 +4,7 @@ import { <%= routerImports %> } from '@angular/router';
 @Injectable({
   providedIn: 'root'
 })
-export class <%= classify(name) %>Guard implements <%= implementations %> {
+export class <%= classify(name) %><%= classify(type) %> implements <%= implementations %> {
   <% if (implements.includes('CanActivate')) { %>canActivate(
     route: ActivatedRouteSnapshot,
     state: RouterStateSnapshot): MaybeAsync<GuardResult> {

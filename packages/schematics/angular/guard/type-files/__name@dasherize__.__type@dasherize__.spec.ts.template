@@ -1,11 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import { <%= guardType %> } from '@angular/router';
 
-import { <%= camelize(name) %>Guard } from './<%= dasherize(name) %>.guard';
+import { <%= camelize(name) %><%= classify(type) %> } from './<%= dasherize(name) %><%= type ? '.' + dasherize(type) : '' %>';
 
-describe('<%= camelize(name) %>Guard', () => {
+describe('<%= camelize(name) %><%= classify(type) %>', () => {
   const executeGuard: <%= guardType %><% if (guardType === 'CanDeactivateFn') { %><unknown><% } %> = (...guardParameters) => 
-      TestBed.runInInjectionContext(() => <%= camelize(name) %>Guard(...guardParameters));
+      TestBed.runInInjectionContext(() => <%= camelize(name) %><%= classify(type) %>(...guardParameters));
 
   beforeEach(() => {
     TestBed.configureTestingModule({});
