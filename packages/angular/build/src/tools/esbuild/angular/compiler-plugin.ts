@@ -29,6 +29,7 @@ import { SharedTSCompilationState, getSharedCompilationState } from './compilati
 import { ComponentStylesheetBundler } from './component-stylesheets';
 import { FileReferenceTracker } from './file-reference-tracker';
 import { setupJitPluginCallbacks } from './jit-plugin-callbacks';
+import { rewriteForBazel } from './rewrite-bazel-paths';
 import { SourceFileCache } from './source-file-cache';
 
 export interface CompilerPluginOptions {
@@ -484,7 +485,7 @@ export function createCompilerPlugin(
       build.onLoad(
         { filter: /\.[cm]?js$/ },
         createCachedLoad(pluginOptions.loadResultCache, async (args) => {
-          let request = args.path;
+          let request = rewriteForBazel(args.path);
           if (pluginOptions.fileReplacements) {
             const replacement = pluginOptions.fileReplacements[path.normalize(args.path)];
             if (replacement) {
@@ -505,6 +506,7 @@ export function createCompilerPlugin(
               return {
                 contents,
                 loader: 'js',
+                resolveDir: path.dirname(request),
                 watchFiles: request !== args.path ? [request] : undefined,
               };
             },
