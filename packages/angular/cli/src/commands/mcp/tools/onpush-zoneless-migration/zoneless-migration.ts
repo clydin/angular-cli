@@ -120,7 +120,8 @@ async function discoverAndCategorizeFiles(
   fileOrDirPath: string,
   extras: RequestHandlerExtra<ServerRequest, ServerNotification>,
 ) {
-  let files: SourceFile[] = [];
+  const sourceFileCache = new Map<string, SourceFile>();
+  const files: SourceFile[] = [];
   const componentTestFiles = new Set<SourceFile>();
   const filesWithComponents = new Set<SourceFile>();
   const zoneFiles = new Set<SourceFile>();
@@ -136,13 +137,13 @@ async function discoverAndCategorizeFiles(
   if (isDirectory) {
     const allFiles = glob(`${fileOrDirPath}/**/*.ts`);
     for await (const file of allFiles) {
-      files.push(await createSourceFile(file));
+      files.push(await getCachedSourceFile(file, sourceFileCache));
     }
   } else {
-    files = [await createSourceFile(fileOrDirPath)];
+    files.push(await getCachedSourceFile(fileOrDirPath, sourceFileCache));
     const maybeTestFile = await getTestFilePath(fileOrDirPath);
     if (maybeTestFile) {
-      componentTestFiles.add(await createSourceFile(maybeTestFile));
+      componentTestFiles.add(await getCachedSourceFile(maybeTestFile, sourceFileCache));
     }
   }
 
@@ -172,7 +173,7 @@ async function discoverAndCategorizeFiles(
 
       const testFilePath = await getTestFilePath(sourceFile.fileName);
       if (testFilePath) {
-        componentTestFiles.add(await createSourceFile(testFilePath));
+        componentTestFiles.add(await getCachedSourceFile(testFilePath, sourceFileCache));
       }
     } else if (zoneSpecifier) {
       zoneFiles.add(sourceFile);
@@ -180,6 +181,25 @@ async function discoverAndCategorizeFiles(
   }
 
   return { filesWithComponents, componentTestFiles, zoneFiles };
+}
+
+/**
+ * A caching wrapper around `createSourceFile` to ensure each file is read and parsed only once.
+ * @param filePath The absolute path to the file.
+ * @param cache A map holding the cache of SourceFile objects.
+ * @returns A promise that resolves to the SourceFile object.
+ */
+async function getCachedSourceFile(
+  filePath: string,
+  cache: Map<string, SourceFile>,
+): Promise<SourceFile> {
+  let sourceFile = cache.get(filePath);
+  if (!sourceFile) {
+    sourceFile = await createSourceFile(filePath);
+    cache.set(filePath, sourceFile);
+  }
+
+  return sourceFile;
 }
 
 async function rankComponentFilesForMigration(
