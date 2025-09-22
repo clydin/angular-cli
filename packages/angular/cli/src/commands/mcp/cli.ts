@@ -67,6 +67,7 @@ export default class McpCommandModule extends CommandModule implements CommandMo
       return;
     }
 
+    const analytics = await this.getAnalytics();
     const server = await createMcpServer(
       {
         workspace: this.context.workspace,
@@ -75,7 +76,14 @@ export default class McpCommandModule extends CommandModule implements CommandMo
         experimentalTools: options.experimentalTool,
       },
       this.context.logger,
+      analytics,
     );
+
+    analytics?.reportMcpSessionStart({
+      mcpReadOnly: options.readOnly,
+      mcpLocalOnly: options.localOnly,
+    });
+
     const transport = new StdioServerTransport();
     await server.connect(transport);
   }

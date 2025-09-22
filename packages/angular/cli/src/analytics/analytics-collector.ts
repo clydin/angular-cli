@@ -119,6 +119,27 @@ export class AnalyticsCollector {
     this.event('run_command', { [EventCustomDimension.Command]: command });
   }
 
+  reportMcpSessionStart(parameters: { mcpReadOnly: boolean; mcpLocalOnly: boolean }): void {
+    this.event('mcp_session_start', {
+      [EventCustomDimension.McpReadOnly]: parameters.mcpReadOnly,
+      [EventCustomDimension.McpLocalOnly]: parameters.mcpLocalOnly,
+    });
+  }
+
+  reportMcpToolInvocation(parameters: {
+    toolName: string;
+    clientName: string;
+    toolStatus: string;
+    toolDuration: number;
+  }): void {
+    this.event('mcp_tool_invocation', {
+      [EventCustomDimension.McpToolName]: parameters.toolName,
+      [EventCustomDimension.McpClientName]: parameters.clientName,
+      [EventCustomDimension.McpToolStatus]: parameters.toolStatus,
+      [EventCustomMetric.McpToolDurationMs]: parameters.toolDuration,
+    });
+  }
+
   private event(eventName: string, parameters?: Record<string, PrimitiveTypes>): void {
     this.trackingEventsQueue ??= [];
     this.trackingEventsQueue.push({

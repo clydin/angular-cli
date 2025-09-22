@@ -66,6 +66,11 @@ PROJECT NAME TO BUILD OR A MODULE NAME.**
 | BuilderTarget | `ep.ng_builder_target` | `string` |
 | Aot | `ep.ng_aot` | `string` |
 | Optimization | `ep.ng_optimization` | `string` |
+| McpClientName | `ep.ng_mcp_client_name` | `string` |
+| McpToolName | `ep.ng_mcp_tool_name` | `string` |
+| McpToolStatus | `ep.ng_mcp_tool_status` | `string` |
+| McpReadOnly | `ep.ng_mcp_read_only` | `string` |
+| McpLocalOnly | `ep.ng_mcp_local_only` | `string` |
 <!--DIMENSIONS_TABLE_END-->
 
 ### List of Event Custom Metrics
@@ -84,6 +89,7 @@ PROJECT NAME TO BUILD OR A MODULE NAME.**
 | AllProjectsCount | `epn.all_projects_count` | `number` |
 | LibraryProjectsCount | `epn.libs_projects_count` | `number` |
 | ApplicationProjectsCount | `epn.apps_projects_count` | `number` |
+| McpToolDurationMs | `epn.ng_mcp_tool_duration_ms` | `number` |
 <!--METRICS_TABLE_END-->
 
 ## Debugging

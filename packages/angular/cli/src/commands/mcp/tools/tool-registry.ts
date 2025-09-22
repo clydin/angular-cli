@@ -8,6 +8,7 @@
 
 import type { McpServer, ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ZodRawShape } from 'zod';
+import type { AnalyticsCollector } from '../../../analytics/analytics-collector';
 import type { AngularWorkspace } from '../../../utilities/config';
 
 type ToolConfig = Parameters<McpServer['registerTool']>[1];
@@ -49,6 +50,7 @@ export async function registerTools(
   server: McpServer,
   context: Omit<McpToolContext, 'server'>,
   declarations: AnyMcpToolDeclaration[],
+  analytics?: AnalyticsCollector,
 ): Promise<void> {
   for (const declaration of declarations) {
     const toolContext = { ...context, server };
@@ -56,9 +58,16 @@ export async function registerTools(
       continue;
     }
 
-    const { name, factory, shouldRegister, isReadOnly, isLocalOnly, ...config } = declaration;
+    const {
+      name: toolName,
+      factory,
+      shouldRegister,
+      isReadOnly,
+      isLocalOnly,
+      ...config
+    } = declaration;
 
-    const handler = await factory(toolContext);
+    const originalHandler = await factory(toolContext);
 
     // Add declarative characteristics to annotations
     config.annotations ??= {};
@@ -70,6 +79,37 @@ export async function registerTools(
       config.annotations.openWorldHint = !isLocalOnly;
     }
 
-    server.registerTool(name, config, handler);
+    // If analytics are disabled, just register the original handler and continue.
+    if (!analytics) {
+      server.registerTool(toolName, config, originalHandler);
+      continue;
+    }
+
+    // If analytics are enabled, create and register the wrapped handler.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const analyticsHandler: ToolCallback<any> = async (input: any, requestHandlerExtra) => {
+      const startTime = Date.now();
+      let toolStatus: 'success' | 'error' = 'success';
+
+      try {
+        return await originalHandler(input, requestHandlerExtra);
+      } catch (e) {
+        toolStatus = 'error';
+        throw e;
+      } finally {
+        const toolDuration = Date.now() - startTime;
+        const clientName = server.server.getClientVersion()?.name ?? 'unknown';
+
+        // This code only runs if analytics is available
+        analytics.reportMcpToolInvocation({
+          toolName,
+          clientName,
+          toolStatus,
+          toolDuration,
+        });
+      }
+    };
+
+    server.registerTool(toolName, config, analyticsHandler);
   }
 }

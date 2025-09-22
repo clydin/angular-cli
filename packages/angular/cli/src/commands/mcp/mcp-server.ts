@@ -8,6 +8,7 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import path from 'node:path';
+import type { AnalyticsCollector } from '../../analytics/analytics-collector';
 import type { AngularWorkspace } from '../../utilities/config';
 import { VERSION } from '../../utilities/version';
 import { registerInstructionsResource } from './resources/instructions';
@@ -46,6 +47,7 @@ export async function createMcpServer(
     experimentalTools?: string[];
   },
   logger: { warn(text: string): void },
+  analytics?: AnalyticsCollector,
 ): Promise<McpServer> {
   const server = new McpServer(
     {
@@ -104,6 +106,7 @@ equivalent actions.
       exampleDatabasePath: path.join(__dirname, '../../../lib/code-examples.db'),
     },
     toolDeclarations,
+    analytics,
   );
 
   return server;

@@ -82,6 +82,12 @@ export enum EventCustomDimension {
   BuilderTarget = 'ep.ng_builder_target',
   Aot = 'ep.ng_aot',
   Optimization = 'ep.ng_optimization',
+  // MCP custom dimensions
+  McpClientName = 'ep.ng_mcp_client_name',
+  McpToolName = 'ep.ng_mcp_tool_name',
+  McpToolStatus = 'ep.ng_mcp_tool_status',
+  McpReadOnly = 'ep.ng_mcp_read_only',
+  McpLocalOnly = 'ep.ng_mcp_local_only',
 }
 
 /**
@@ -104,4 +110,6 @@ export enum EventCustomMetric {
   AllProjectsCount = 'epn.all_projects_count',
   LibraryProjectsCount = 'epn.libs_projects_count',
   ApplicationProjectsCount = 'epn.apps_projects_count',
+  // MCP custom metrics
+  McpToolDurationMs = 'epn.ng_mcp_tool_duration_ms',
 }
