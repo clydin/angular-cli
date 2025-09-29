@@ -8,6 +8,7 @@
 
 import type { PartialMessage, PartialNote } from 'esbuild';
 import { platform } from 'node:os';
+import * as path from 'node:path';
 import type ts from 'typescript';
 
 /**
@@ -98,4 +99,42 @@ export function convertTypeScriptDiagnostic(
   }
 
   return message;
+}
+
+export function createMissingFileDiagnostic(
+  request: string,
+  original: string,
+  root: string,
+  angular: boolean,
+): PartialMessage {
+  const relativeRequest = path.relative(root, request);
+  const notes: PartialNote[] = [];
+
+  if (angular) {
+    notes.push({
+      text:
+        `Files containing Angular metadata ('@Component'/'@Directive'/etc.) must be part of the TypeScript compilation.` +
+        ` You can ensure the file is part of the TypeScript program via the 'files' or 'include' property.`,
+    });
+  } else {
+    notes.push({
+      text:
+        `The file will be bundled and included in the output but will not be type-checked at build time.` +
+        ` To remove this message you can add the file to the TypeScript program via the 'files' or 'include' property.`,
+    });
+  }
+
+  const relativeOriginal = path.relative(root, original);
+  if (relativeRequest !== relativeOriginal) {
+    notes.push({
+      text: `File is requested from a file replacement of '${relativeOriginal}'.`,
+    });
+  }
+
+  const diagnostic = {
+    text: `File '${relativeRequest}' not found in TypeScript compilation.`,
+    notes,
+  };
+
+  return diagnostic;
 }
