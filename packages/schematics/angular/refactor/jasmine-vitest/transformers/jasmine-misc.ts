@@ -19,7 +19,11 @@ import { getJasmineMethodName, isJasmineCallExpression } from '../utils/ast-vali
 import { addTodoComment } from '../utils/comment-helpers';
 import { RefactorReporter } from '../utils/refactor-reporter';
 
-export function transformTimerMocks(node: ts.Node): ts.Node {
+export function transformTimerMocks(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   if (
     !ts.isCallExpression(node) ||
     !ts.isPropertyAccessExpression(node.expression) ||
@@ -51,6 +55,11 @@ export function transformTimerMocks(node: ts.Node): ts.Node {
   }
 
   if (newMethodName) {
+    reporter.reportTransformation(
+      sourceFile,
+      node,
+      `Transformed \`jasmine.clock().${pae.name.text}\` to \`vi.${newMethodName}\`.`,
+    );
     const newArgs = newMethodName === 'useFakeTimers' ? [] : node.arguments;
 
     return createViCallExpression(newMethodName, newArgs);
@@ -59,13 +68,18 @@ export function transformTimerMocks(node: ts.Node): ts.Node {
   return node;
 }
 
-export function transformFail(node: ts.Node): ts.Node {
+export function transformFail(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   if (
     ts.isExpressionStatement(node) &&
     ts.isCallExpression(node.expression) &&
     ts.isIdentifier(node.expression.expression) &&
     node.expression.expression.text === 'fail'
   ) {
+    reporter.reportTransformation(sourceFile, node, 'Transformed `fail()` to `throw new Error()`.');
     const reason = node.expression.arguments[0];
 
     return ts.factory.createThrowStatement(
@@ -80,7 +94,11 @@ export function transformFail(node: ts.Node): ts.Node {
   return node;
 }
 
-export function transformDefaultTimeoutInterval(node: ts.Node): ts.Node {
+export function transformDefaultTimeoutInterval(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   if (
     ts.isExpressionStatement(node) &&
     ts.isBinaryExpression(node.expression) &&
@@ -93,6 +111,11 @@ export function transformDefaultTimeoutInterval(node: ts.Node): ts.Node {
       assignment.left.expression.text === 'jasmine' &&
       assignment.left.name.text === 'DEFAULT_TIMEOUT_INTERVAL'
     ) {
+      reporter.reportTransformation(
+        sourceFile,
+        node,
+        'Transformed `jasmine.DEFAULT_TIMEOUT_INTERVAL` to `vi.setConfig()`.',
+      );
       const timeoutValue = assignment.right;
       const setConfigCall = createViCallExpression('setConfig', [
         ts.factory.createObjectLiteralExpression(
@@ -121,6 +144,7 @@ const JASMINE_UNSUPPORTED_CALLS = new Map<string, string>([
 
 export function transformUnsupportedJasmineCalls(
   node: ts.Node,
+  sourceFile: ts.SourceFile,
   reporter: RefactorReporter,
 ): ts.Node {
   const methodName = getJasmineMethodName(node);
@@ -130,6 +154,11 @@ export function transformUnsupportedJasmineCalls(
 
   const message = JASMINE_UNSUPPORTED_CALLS.get(methodName);
   if (message) {
+    reporter.reportTransformation(
+      sourceFile,
+      node,
+      `Found unsupported call \`jasmine.${methodName}\`.`,
+    );
     reporter.recordTodo(methodName);
     addTodoComment(node, message);
   }
@@ -165,6 +194,7 @@ const HANDLED_JASMINE_PROPERTIES = new Set([
 
 export function transformUnknownJasmineProperties(
   node: ts.Node,
+  sourceFile: ts.SourceFile,
   reporter: RefactorReporter,
 ): ts.Node {
   if (
@@ -174,6 +204,11 @@ export function transformUnknownJasmineProperties(
   ) {
     const propName = node.name.text;
     if (!HANDLED_JASMINE_PROPERTIES.has(propName)) {
+      reporter.reportTransformation(
+        sourceFile,
+        node,
+        `Found unknown jasmine property \`jasmine.${propName}\`.`,
+      );
       reporter.recordTodo(`unknown-jasmine-property: ${propName}`);
       addTodoComment(
         node,

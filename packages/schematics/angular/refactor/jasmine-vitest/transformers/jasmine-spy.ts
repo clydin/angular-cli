@@ -19,7 +19,11 @@ import { getJasmineMethodName, isJasmineCallExpression } from '../utils/ast-vali
 import { addTodoComment } from '../utils/comment-helpers';
 import { RefactorReporter } from '../utils/refactor-reporter';
 
-export function transformSpies(node: ts.Node, reporter: RefactorReporter): ts.Node {
+export function transformSpies(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   if (!ts.isCallExpression(node)) {
     return node;
   }
@@ -28,6 +32,12 @@ export function transformSpies(node: ts.Node, reporter: RefactorReporter): ts.No
     ts.isIdentifier(node.expression) &&
     (node.expression.text === 'spyOn' || node.expression.text === 'spyOnProperty')
   ) {
+    reporter.reportTransformation(
+      sourceFile,
+      node,
+      `Transformed \`${node.expression.text}\` to \`vi.spyOn\`.`,
+    );
+
     return ts.factory.updateCallExpression(
       node,
       createPropertyAccess('vi', 'spyOn'),
@@ -47,7 +57,8 @@ export function transformSpies(node: ts.Node, reporter: RefactorReporter): ts.No
       const spyCall = pae.expression.expression;
       let newMethodName: string | undefined;
       if (ts.isIdentifier(pae.name)) {
-        switch (pae.name.text) {
+        const strategyName = pae.name.text;
+        switch (strategyName) {
           case 'returnValue':
             newMethodName = 'mockReturnValue';
             break;
@@ -58,10 +69,15 @@ export function transformSpies(node: ts.Node, reporter: RefactorReporter): ts.No
             newMethodName = 'mockRejectedValue';
             break;
           case 'returnValues': {
+            reporter.reportTransformation(
+              sourceFile,
+              node,
+              'Transformed `.and.returnValues()` to chained `.mockReturnValueOnce()` calls.',
+            );
             const returnValues = node.arguments;
             if (returnValues.length === 0) {
               // No values, so it's a no-op. Just transform the spyOn call.
-              return transformSpies(spyCall, reporter);
+              return transformSpies(spyCall, sourceFile, reporter);
             }
             // spy.and.returnValues(a, b) -> spy.mockReturnValueOnce(a).mockReturnValueOnce(b)
             let chainedCall: ts.Expression = spyCall;
@@ -80,8 +96,19 @@ export function transformSpies(node: ts.Node, reporter: RefactorReporter): ts.No
             newMethodName = 'mockImplementation';
             break;
           case 'callThrough':
-            return transformSpies(spyCall, reporter); // .and.callThrough() is redundant, just transform spyOn.
+            reporter.reportTransformation(
+              sourceFile,
+              node,
+              'Removed redundant `.and.callThrough()` call.',
+            );
+
+            return transformSpies(spyCall, sourceFile, reporter); // .and.callThrough() is redundant, just transform spyOn.
           case 'stub': {
+            reporter.reportTransformation(
+              sourceFile,
+              node,
+              'Transformed `.and.stub()` to `.mockImplementation()`.',
+            );
             const newExpression = createPropertyAccess(spyCall, 'mockImplementation');
             const arrowFn = ts.factory.createArrowFunction(
               undefined,
@@ -95,6 +122,11 @@ export function transformSpies(node: ts.Node, reporter: RefactorReporter): ts.No
             return ts.factory.createCallExpression(newExpression, undefined, [arrowFn]);
           }
           case 'throwError': {
+            reporter.reportTransformation(
+              sourceFile,
+              node,
+              'Transformed `.and.throwError()` to `.mockImplementation()`.',
+            );
             const errorArg = node.arguments[0];
             const throwStatement = ts.factory.createThrowStatement(
               ts.isNewExpression(errorArg)
@@ -121,20 +153,25 @@ export function transformSpies(node: ts.Node, reporter: RefactorReporter): ts.No
             reporter.recordTodo('unsupported-spy-strategy');
             addTodoComment(
               node,
-              `Unsupported spy strategy ".and.${pae.name.text}()" found. Please migrate this manually.`,
+              `Unsupported spy strategy ".and.${strategyName}()" found. Please migrate this manually.`,
             );
         }
-      }
 
-      if (newMethodName) {
-        const newExpression = createPropertyAccess(spyCall, newMethodName);
+        if (newMethodName) {
+          reporter.reportTransformation(
+            sourceFile,
+            node,
+            `Transformed spy strategy \`.and.${strategyName}()\` to \`.${newMethodName}()\`.`,
+          );
+          const newExpression = createPropertyAccess(spyCall, newMethodName);
 
-        return ts.factory.updateCallExpression(
-          node,
-          newExpression,
-          node.typeArguments,
-          node.arguments,
-        );
+          return ts.factory.updateCallExpression(
+            node,
+            newExpression,
+            node.typeArguments,
+            node.arguments,
+          );
+        }
       }
     }
   }
@@ -142,9 +179,20 @@ export function transformSpies(node: ts.Node, reporter: RefactorReporter): ts.No
   const jasmineMethodName = getJasmineMethodName(node);
   switch (jasmineMethodName) {
     case 'createSpy':
+      reporter.reportTransformation(
+        sourceFile,
+        node,
+        'Transformed `jasmine.createSpy()` to `vi.fn()`.',
+      );
+
       // jasmine.createSpy(name, originalFn) -> vi.fn(originalFn)
       return createViCallExpression('fn', node.arguments.length > 1 ? [node.arguments[1]] : []);
     case 'spyOnAllFunctions':
+      reporter.reportTransformation(
+        sourceFile,
+        node,
+        'Found unsupported `jasmine.spyOnAllFunctions()`.',
+      );
       reporter.recordTodo('spyOnAllFunctions');
       addTodoComment(
         node,
@@ -158,10 +206,20 @@ export function transformSpies(node: ts.Node, reporter: RefactorReporter): ts.No
   return node;
 }
 
-export function transformCreateSpyObj(node: ts.Node, reporter: RefactorReporter): ts.Node {
+export function transformCreateSpyObj(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   if (!isJasmineCallExpression(node, 'createSpyObj')) {
     return node;
   }
+
+  reporter.reportTransformation(
+    sourceFile,
+    node,
+    'Transformed `jasmine.createSpyObj()` to an object literal with `vi.fn()`.',
+  );
 
   if (node.arguments.length < 2) {
     reporter.recordTodo('createSpyObj-single-argument');
@@ -241,7 +299,11 @@ function createSpyObjWithObject(methods: ts.ObjectLiteralExpression): ts.Propert
     .filter((p): p is ts.PropertyAssignment => !!p);
 }
 
-export function transformSpyReset(node: ts.Node): ts.Node {
+export function transformSpyReset(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   if (
     ts.isCallExpression(node) &&
     ts.isPropertyAccessExpression(node.expression) &&
@@ -251,6 +313,11 @@ export function transformSpyReset(node: ts.Node): ts.Node {
   ) {
     const callsPae = node.expression.expression;
     if (ts.isIdentifier(callsPae.name) && callsPae.name.text === 'calls') {
+      reporter.reportTransformation(
+        sourceFile,
+        node,
+        'Transformed `spy.calls.reset()` to `.mockClear()`.',
+      );
       const spyIdentifier = callsPae.expression;
       const newExpression = createPropertyAccess(spyIdentifier, 'mockClear');
 
@@ -279,7 +346,11 @@ function createMockedSpyMockProperty(spyIdentifier: ts.Expression): ts.PropertyA
   return createPropertyAccess(mockedSpy, 'mock');
 }
 
-export function transformSpyCallInspection(node: ts.Node, reporter: RefactorReporter): ts.Node {
+export function transformSpyCallInspection(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   // mySpy.calls.mostRecent().args -> vi.mocked(mySpy).mock.lastCall
   if (
     ts.isPropertyAccessExpression(node) &&
@@ -299,6 +370,11 @@ export function transformSpyCallInspection(node: ts.Node, reporter: RefactorRepo
       ) {
         const spyIdentifier = getSpyIdentifierFromCalls(mostRecentPae.expression);
         if (spyIdentifier) {
+          reporter.reportTransformation(
+            sourceFile,
+            node,
+            'Transformed `spy.calls.mostRecent().args` to `vi.mocked(spy).mock.lastCall`.',
+          );
           const mockProperty = createMockedSpyMockProperty(spyIdentifier);
 
           return createPropertyAccess(mockProperty, 'lastCall');
@@ -318,22 +394,38 @@ export function transformSpyCallInspection(node: ts.Node, reporter: RefactorRepo
       const callsProperty = createPropertyAccess(mockProperty, 'calls');
 
       const callName = pae.name.text;
+      let newExpression: ts.Node | undefined;
+      let message: string | undefined;
+
       switch (callName) {
         case 'any':
-          return ts.factory.createBinaryExpression(
+          message = 'Transformed `spy.calls.any()` to a check on `mock.calls.length`.';
+          newExpression = ts.factory.createBinaryExpression(
             createPropertyAccess(callsProperty, 'length'),
             ts.SyntaxKind.GreaterThanToken,
             ts.factory.createNumericLiteral(0),
           );
+          break;
         case 'count':
-          return createPropertyAccess(callsProperty, 'length');
+          message = 'Transformed `spy.calls.count()` to `mock.calls.length`.';
+          newExpression = createPropertyAccess(callsProperty, 'length');
+          break;
         case 'first':
-          return ts.factory.createElementAccessExpression(callsProperty, 0);
+          message = 'Transformed `spy.calls.first()` to `mock.calls[0]`.';
+          newExpression = ts.factory.createElementAccessExpression(callsProperty, 0);
+          break;
         case 'all':
         case 'allArgs':
-          return callsProperty;
+          message = `Transformed \`spy.calls.${callName}()\` to \`mock.calls\`.`;
+          newExpression = callsProperty;
+          break;
         case 'argsFor':
-          return ts.factory.createElementAccessExpression(callsProperty, node.arguments[0]);
+          message = 'Transformed `spy.calls.argsFor()` to `mock.calls[i]`.';
+          newExpression = ts.factory.createElementAccessExpression(
+            callsProperty,
+            node.arguments[0],
+          );
+          break;
         case 'mostRecent':
           if (
             !ts.isPropertyAccessExpression(node.parent) ||
@@ -349,6 +441,12 @@ export function transformSpyCallInspection(node: ts.Node, reporter: RefactorRepo
           }
 
           return node;
+      }
+
+      if (newExpression && message) {
+        reporter.reportTransformation(sourceFile, node, message);
+
+        return newExpression;
       }
     }
   }

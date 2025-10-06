@@ -7,11 +7,13 @@
  */
 
 import { logging } from '@angular-devkit/core';
+import ts from '../../../third_party/github.com/Microsoft/TypeScript/lib/typescript';
 
 export class RefactorReporter {
   private filesScanned = 0;
   private filesTransformed = 0;
   private readonly todos = new Map<string, number>();
+  private readonly verboseLogs = new Map<string, string[]>();
 
   constructor(private logger: logging.LoggerApi) {}
 
@@ -27,7 +29,31 @@ export class RefactorReporter {
     this.todos.set(category, (this.todos.get(category) ?? 0) + 1);
   }
 
-  printSummary(): void {
+  reportTransformation(sourceFile: ts.SourceFile, node: ts.Node, message: string): void {
+    const { line } = ts.getLineAndCharacterOfPosition(
+      sourceFile,
+      ts.getOriginalNode(node).getStart(),
+    );
+    const filePath = sourceFile.fileName;
+
+    let logs = this.verboseLogs.get(filePath);
+    if (!logs) {
+      logs = [];
+      this.verboseLogs.set(filePath, logs);
+    }
+    logs.push(`L${line + 1}: ${message}`);
+  }
+
+  printSummary(verbose = false): void {
+    if (verbose && this.verboseLogs.size > 0) {
+      this.logger.info('Detailed Transformation Log:');
+      for (const [filePath, logs] of this.verboseLogs) {
+        this.logger.info(`Processing: ${filePath}`);
+        logs.forEach((log) => this.logger.info(`  - ${log}`));
+      }
+      this.logger.info(''); // Add a blank line for separation
+    }
+
     this.logger.info('Jasmine to Vitest Refactoring Summary:');
     this.logger.info(`- ${this.filesScanned} test file(s) scanned.`);
     this.logger.info(`- ${this.filesTransformed} file(s) transformed.`);

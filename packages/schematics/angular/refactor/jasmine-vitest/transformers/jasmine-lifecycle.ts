@@ -25,13 +25,24 @@ const FOCUSED_SKIPPED_RENAMES = new Map<string, { newBase: string; newName: stri
   ['xit', { newBase: 'it', newName: 'skip' }],
 ]);
 
-export function transformFocusedAndSkippedTests(node: ts.Node): ts.Node {
+export function transformFocusedAndSkippedTests(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression)) {
     return node;
   }
 
-  const rename = FOCUSED_SKIPPED_RENAMES.get(node.expression.text);
+  const oldName = node.expression.text;
+  const rename = FOCUSED_SKIPPED_RENAMES.get(oldName);
   if (rename) {
+    reporter.reportTransformation(
+      sourceFile,
+      node,
+      `Transformed \`${oldName}\` to \`${rename.newBase}.${rename.newName}\`.`,
+    );
+
     const newPropAccess = createPropertyAccess(rename.newBase, rename.newName);
 
     return ts.factory.updateCallExpression(node, newPropAccess, node.typeArguments, node.arguments);
@@ -43,6 +54,7 @@ export function transformFocusedAndSkippedTests(node: ts.Node): ts.Node {
 export function transformPending(
   node: ts.Node,
   context: ts.TransformationContext,
+  sourceFile: ts.SourceFile,
   reporter: RefactorReporter,
 ): ts.Node {
   if (
@@ -70,6 +82,11 @@ export function transformPending(
       const replacement = ts.factory.createEmptyStatement();
       const originalText = bodyNode.getFullText().trim();
 
+      reporter.reportTransformation(
+        sourceFile,
+        bodyNode,
+        'Converted `pending()` to a skipped test (`it.skip`).',
+      );
       reporter.recordTodo('pending');
       addTodoComment(
         replacement,
@@ -125,6 +142,8 @@ function transformComplexDoneCallback(
   node: ts.Node,
   context: ts.TransformationContext,
   doneIdentifier: ts.Identifier,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
 ): ts.Node | ts.Node[] | undefined {
   if (
     !ts.isExpressionStatement(node) ||
@@ -169,6 +188,12 @@ function transformComplexDoneCallback(
     return node;
   }
 
+  reporter.reportTransformation(
+    sourceFile,
+    node,
+    'Transformed promise `.then()` with `done()` to `await`.',
+  );
+
   const newThenCallback = ts.isArrowFunction(thenCallback)
     ? ts.factory.updateArrowFunction(
         thenCallback,
@@ -197,7 +222,78 @@ function transformComplexDoneCallback(
   return ts.factory.createExpressionStatement(ts.factory.createAwaitExpression(newCall));
 }
 
-export function transformDoneCallback(node: ts.Node, context: ts.TransformationContext): ts.Node {
+function transformPromiseBasedDone(
+  callExpr: ts.CallExpression,
+  doneIdentifier: ts.Identifier,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node | undefined {
+  if (
+    ts.isPropertyAccessExpression(callExpr.expression) &&
+    (callExpr.expression.name.text === 'then' || callExpr.expression.name.text === 'catch')
+  ) {
+    const promiseHandler = callExpr.arguments[0];
+    if (promiseHandler) {
+      let isDoneHandler = false;
+      // promise.then(done)
+      if (ts.isIdentifier(promiseHandler) && promiseHandler.text === doneIdentifier.text) {
+        isDoneHandler = true;
+      }
+      // promise.catch(done.fail)
+      if (
+        ts.isPropertyAccessExpression(promiseHandler) &&
+        ts.isIdentifier(promiseHandler.expression) &&
+        promiseHandler.expression.text === doneIdentifier.text &&
+        promiseHandler.name.text === 'fail'
+      ) {
+        isDoneHandler = true;
+      }
+      // promise.then(() => done())
+      if (ts.isArrowFunction(promiseHandler) && !promiseHandler.parameters.length) {
+        const body = promiseHandler.body;
+        if (
+          ts.isCallExpression(body) &&
+          ts.isIdentifier(body.expression) &&
+          body.expression.text === doneIdentifier.text
+        ) {
+          isDoneHandler = true;
+        }
+        if (ts.isBlock(body) && body.statements.length === 1) {
+          const stmt = body.statements[0];
+          if (
+            ts.isExpressionStatement(stmt) &&
+            ts.isCallExpression(stmt.expression) &&
+            ts.isIdentifier(stmt.expression.expression) &&
+            stmt.expression.expression.text === doneIdentifier.text
+          ) {
+            isDoneHandler = true;
+          }
+        }
+      }
+
+      if (isDoneHandler) {
+        reporter.reportTransformation(
+          sourceFile,
+          callExpr,
+          'Transformed promise `.then(done)` to `await`.',
+        );
+
+        return ts.factory.createExpressionStatement(
+          ts.factory.createAwaitExpression(callExpr.expression.expression),
+        );
+      }
+    }
+  }
+
+  return undefined;
+}
+
+export function transformDoneCallback(
+  node: ts.Node,
+  context: ts.TransformationContext,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   if (
     !ts.isCallExpression(node) ||
     !ts.isIdentifier(node.expression) ||
@@ -226,7 +322,13 @@ export function transformDoneCallback(node: ts.Node, context: ts.TransformationC
   let doneWasUsed = false;
 
   const bodyVisitor = (bodyNode: ts.Node): ts.Node | ts.Node[] | undefined => {
-    const complexTransformed = transformComplexDoneCallback(bodyNode, context, doneIdentifier);
+    const complexTransformed = transformComplexDoneCallback(
+      bodyNode,
+      context,
+      doneIdentifier,
+      sourceFile,
+      reporter,
+    );
     if (complexTransformed !== bodyNode) {
       doneWasUsed = true;
 
@@ -244,6 +346,11 @@ export function transformDoneCallback(node: ts.Node, context: ts.TransformationC
         callExpr.expression.name.text === 'fail'
       ) {
         doneWasUsed = true;
+        reporter.reportTransformation(
+          sourceFile,
+          bodyNode,
+          'Transformed `done.fail()` to `throw new Error()`.',
+        );
         const errorArgs = callExpr.arguments.length > 0 ? [callExpr.arguments[0]] : [];
 
         return ts.factory.createThrowStatement(
@@ -256,57 +363,16 @@ export function transformDoneCallback(node: ts.Node, context: ts.TransformationC
       }
 
       // Transform `promise.then(done)` or `promise.catch(done.fail)` to `await promise`
-      if (
-        ts.isPropertyAccessExpression(callExpr.expression) &&
-        (callExpr.expression.name.text === 'then' || callExpr.expression.name.text === 'catch')
-      ) {
-        const promiseHandler = callExpr.arguments[0];
-        if (promiseHandler) {
-          let isDoneHandler = false;
-          // promise.then(done)
-          if (ts.isIdentifier(promiseHandler) && promiseHandler.text === doneIdentifier.text) {
-            isDoneHandler = true;
-          }
-          // promise.catch(done.fail)
-          if (
-            ts.isPropertyAccessExpression(promiseHandler) &&
-            ts.isIdentifier(promiseHandler.expression) &&
-            promiseHandler.expression.text === doneIdentifier.text &&
-            promiseHandler.name.text === 'fail'
-          ) {
-            isDoneHandler = true;
-          }
-          // promise.then(() => done())
-          if (ts.isArrowFunction(promiseHandler) && !promiseHandler.parameters.length) {
-            const body = promiseHandler.body;
-            if (
-              ts.isCallExpression(body) &&
-              ts.isIdentifier(body.expression) &&
-              body.expression.text === doneIdentifier.text
-            ) {
-              isDoneHandler = true;
-            }
-            if (ts.isBlock(body) && body.statements.length === 1) {
-              const stmt = body.statements[0];
-              if (
-                ts.isExpressionStatement(stmt) &&
-                ts.isCallExpression(stmt.expression) &&
-                ts.isIdentifier(stmt.expression.expression) &&
-                stmt.expression.expression.text === doneIdentifier.text
-              ) {
-                isDoneHandler = true;
-              }
-            }
-          }
+      const promiseTransformed = transformPromiseBasedDone(
+        callExpr,
+        doneIdentifier,
+        sourceFile,
+        reporter,
+      );
+      if (promiseTransformed) {
+        doneWasUsed = true;
 
-          if (isDoneHandler) {
-            doneWasUsed = true;
-
-            return ts.factory.createExpressionStatement(
-              ts.factory.createAwaitExpression(callExpr.expression.expression),
-            );
-          }
-        }
+        return promiseTransformed;
       }
 
       // Remove `done()`
@@ -341,6 +407,12 @@ export function transformDoneCallback(node: ts.Node, context: ts.TransformationC
   if (!doneWasUsed) {
     return node;
   }
+
+  reporter.reportTransformation(
+    sourceFile,
+    node,
+    `Converted test with \`done\` callback to an \`async\` test.`,
+  );
 
   const newModifiers = [
     ts.factory.createModifier(ts.SyntaxKind.AsyncKeyword),

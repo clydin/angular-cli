@@ -16,6 +16,11 @@
       "$default": {
         "$source": "projectName"
       }
+    },
+    "verbose": {
+      "type": "boolean",
+      "description": "Enable verbose logging to see detailed information about the transformations being applied.",
+      "default": false
     }
   }
 }

@@ -97,6 +97,32 @@ describe('Jasmine to Vitest Schematic', () => {
     expect(changedContent).toContain(`vi.spyOn(window, 'confirm');`);
   });
 
+  it('should print verbose logs when the verbose option is true', async () => {
+    const specFilePath = 'projects/bar/src/app/app.spec.ts';
+    const content = `
+      describe('AppComponent', () => {
+        it('should create the app', () => {
+          const service = { myMethod: () => {} };
+          spyOn(service, 'myMethod');
+        });
+      });
+    `;
+    appTree.overwrite(specFilePath, content);
+
+    const logs: string[] = [];
+    schematicRunner.logger.subscribe((entry) => logs.push(entry.message));
+
+    await schematicRunner.runSchematic(
+      'jasmine-to-vitest',
+      { project: 'bar', verbose: true },
+      appTree,
+    );
+
+    expect(logs).toContain('Detailed Transformation Log:');
+    expect(logs).toContain(`Processing: /${specFilePath}`);
+    expect(logs.some((log) => log.includes('Transformed `spyOn` to `vi.spyOn`'))).toBe(true);
+  });
+
   it('should print a summary report after running', async () => {
     const specFilePath = 'projects/bar/src/app/app.spec.ts';
     const content = `

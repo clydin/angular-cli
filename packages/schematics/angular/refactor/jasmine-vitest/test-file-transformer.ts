@@ -47,9 +47,13 @@ import { RefactorReporter } from './utils/refactor-reporter';
  * @param reporter The reporter to track TODOs.
  * @returns The transformed code.
  */
-export function transformJasmineToVitest(content: string, reporter: RefactorReporter): string {
+export function transformJasmineToVitest(
+  filePath: string,
+  content: string,
+  reporter: RefactorReporter,
+): string {
   const sourceFile = ts.createSourceFile(
-    'spec.ts',
+    filePath,
     content,
     ts.ScriptTarget.Latest,
     true,
@@ -63,31 +67,31 @@ export function transformJasmineToVitest(content: string, reporter: RefactorRepo
       // Transform the node itself based on its type
       if (ts.isCallExpression(transformedNode)) {
         const transformations = [
-          transformWithContext,
-          (node: ts.Node) => transformSpies(node, reporter),
-          (node: ts.Node) => transformCreateSpyObj(node, reporter),
-          transformTimerMocks,
-          (node: ts.Node) => transformExpectAsync(node, reporter),
-          (node: ts.Node) => transformSyntacticSugarMatchers(node, reporter),
-          transformSpyReset,
-          transformFocusedAndSkippedTests,
-          (node: ts.Node) => transformSpyCallInspection(node, reporter),
-          transformComplexMatchers,
-          (node: ts.Node) => transformUnsupportedJasmineCalls(node, reporter),
-          (node: ts.Node) => transformPending(node, context, reporter),
-          transformDoneCallback,
-          transformtoHaveBeenCalledBefore,
-          transformToHaveClass,
+          (node: ts.Node) => transformWithContext(node, sourceFile, reporter),
+          (node: ts.Node) => transformSpies(node, sourceFile, reporter),
+          (node: ts.Node) => transformCreateSpyObj(node, sourceFile, reporter),
+          (node: ts.Node) => transformTimerMocks(node, sourceFile, reporter),
+          (node: ts.Node) => transformExpectAsync(node, sourceFile, reporter),
+          (node: ts.Node) => transformSyntacticSugarMatchers(node, sourceFile, reporter),
+          (node: ts.Node) => transformSpyReset(node, sourceFile, reporter),
+          (node: ts.Node) => transformFocusedAndSkippedTests(node, sourceFile, reporter),
+          (node: ts.Node) => transformSpyCallInspection(node, sourceFile, reporter),
+          (node: ts.Node) => transformComplexMatchers(node, sourceFile, reporter),
+          (node: ts.Node) => transformUnsupportedJasmineCalls(node, sourceFile, reporter),
+          (node: ts.Node) => transformPending(node, context, sourceFile, reporter),
+          (node: ts.Node) => transformDoneCallback(node, context, sourceFile, reporter),
+          (node: ts.Node) => transformtoHaveBeenCalledBefore(node, sourceFile, reporter),
+          (node: ts.Node) => transformToHaveClass(node, sourceFile, reporter),
         ];
 
         for (const transformer of transformations) {
-          transformedNode = transformer(transformedNode, context);
+          transformedNode = transformer(transformedNode);
         }
       } else if (ts.isPropertyAccessExpression(transformedNode)) {
         const transformations = [
-          transformAsymmetricMatchers,
-          (node: ts.Node) => transformSpyCallInspection(node, reporter),
-          (node: ts.Node) => transformUnknownJasmineProperties(node, reporter),
+          (node: ts.Node) => transformAsymmetricMatchers(node, sourceFile, reporter),
+          (node: ts.Node) => transformSpyCallInspection(node, sourceFile, reporter),
+          (node: ts.Node) => transformUnknownJasmineProperties(node, sourceFile, reporter),
         ];
 
         for (const transformer of transformations) {
@@ -95,11 +99,11 @@ export function transformJasmineToVitest(content: string, reporter: RefactorRepo
         }
       } else if (ts.isExpressionStatement(transformedNode)) {
         const statementTransformers = [
-          transformCalledOnceWith,
-          (node: ts.Node) => transformArrayWithExactContents(node, reporter),
-          transformFail,
-          transformDefaultTimeoutInterval,
-          (node: ts.Node) => transformExpectNothing(node, reporter),
+          (node: ts.Node) => transformCalledOnceWith(node, sourceFile, reporter),
+          (node: ts.Node) => transformArrayWithExactContents(node, sourceFile, reporter),
+          (node: ts.Node) => transformFail(node, sourceFile, reporter),
+          (node: ts.Node) => transformDefaultTimeoutInterval(node, sourceFile, reporter),
+          (node: ts.Node) => transformExpectNothing(node, sourceFile, reporter),
         ];
 
         for (const transformer of statementTransformers) {

@@ -41,6 +41,7 @@ const SUGAR_MATCHER_CHANGES = new Map<string, { newName: string; newArgs?: ts.Ex
 
 export function transformSyntacticSugarMatchers(
   node: ts.Node,
+  sourceFile: ts.SourceFile,
   reporter: RefactorReporter,
 ): ts.Node {
   if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) {
@@ -63,6 +64,11 @@ export function transformSyntacticSugarMatchers(
   const mapping = SUGAR_MATCHER_CHANGES.get(matcherName);
 
   if (mapping) {
+    reporter.reportTransformation(
+      sourceFile,
+      node,
+      `Transformed matcher ".${matcherName}()" to ".${mapping.newName}()".`,
+    );
     const newExpression = createPropertyAccess(pae.expression, mapping.newName);
     const newArgs = mapping.newArgs ?? [...node.arguments];
 
@@ -80,7 +86,11 @@ const ASYMMETRIC_MATCHER_NAMES: ReadonlyArray<string> = [
   'arrayContaining',
 ];
 
-export function transformAsymmetricMatchers(node: ts.Node): ts.Node {
+export function transformAsymmetricMatchers(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   if (
     ts.isPropertyAccessExpression(node) &&
     ts.isIdentifier(node.expression) &&
@@ -88,6 +98,12 @@ export function transformAsymmetricMatchers(node: ts.Node): ts.Node {
   ) {
     const matcherName = node.name.text;
     if (ASYMMETRIC_MATCHER_NAMES.includes(matcherName)) {
+      reporter.reportTransformation(
+        sourceFile,
+        node,
+        `Transformed asymmetric matcher \`jasmine.${matcherName}\` to \`expect.${matcherName}\`.`,
+      );
+
       return createPropertyAccess('expect', node.name);
     }
   }
@@ -95,7 +111,11 @@ export function transformAsymmetricMatchers(node: ts.Node): ts.Node {
   return node;
 }
 
-export function transformtoHaveBeenCalledBefore(node: ts.Node): ts.Node {
+export function transformtoHaveBeenCalledBefore(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   if (
     !ts.isCallExpression(node) ||
     !ts.isPropertyAccessExpression(node.expression) ||
@@ -117,6 +137,12 @@ export function transformtoHaveBeenCalledBefore(node: ts.Node): ts.Node {
   if (!ts.isCallExpression(expectExpression) || matcherName !== 'toHaveBeenCalledBefore') {
     return node;
   }
+
+  reporter.reportTransformation(
+    sourceFile,
+    node,
+    'Transformed `toHaveBeenCalledBefore` to a Vitest-compatible spy invocation order comparison.',
+  );
 
   const [spyB] = node.arguments;
   const [spyA] = expectExpression.arguments;
@@ -148,7 +174,11 @@ export function transformtoHaveBeenCalledBefore(node: ts.Node): ts.Node {
   );
 }
 
-export function transformToHaveClass(node: ts.Node): ts.Node {
+export function transformToHaveClass(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   if (
     !ts.isCallExpression(node) ||
     !ts.isPropertyAccessExpression(node.expression) ||
@@ -170,6 +200,12 @@ export function transformToHaveClass(node: ts.Node): ts.Node {
   if (matcherName !== 'toHaveClass') {
     return node;
   }
+
+  reporter.reportTransformation(
+    sourceFile,
+    node,
+    'Transformed `.toHaveClass()` to a `classList.contains()` check.',
+  );
 
   const [className] = node.arguments;
   const newExpectArgs: ts.Expression[] = [];
@@ -215,7 +251,11 @@ const ASYNC_MATCHER_CHANGES = new Map<
   ['toBeRejectedWithError', { base: 'rejects', matcher: 'toThrowError', keepArgs: true }],
 ]);
 
-export function transformExpectAsync(node: ts.Node, reporter: RefactorReporter): ts.Node {
+export function transformExpectAsync(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   if (
     !ts.isCallExpression(node) ||
     !ts.isPropertyAccessExpression(node.expression) ||
@@ -236,6 +276,11 @@ export function transformExpectAsync(node: ts.Node, reporter: RefactorReporter):
   const mapping = matcherName ? ASYNC_MATCHER_CHANGES.get(matcherName) : undefined;
 
   if (mapping) {
+    reporter.reportTransformation(
+      sourceFile,
+      node,
+      `Transformed \`expectAsync(...).${matcherName}\` to \`expect(...).${mapping.base}.${mapping.matcher}\`.`,
+    );
     const newExpectCall = createExpectCallExpression([expectCall.arguments[0]]);
     let newMatcherChain: ts.Expression = createPropertyAccess(newExpectCall, mapping.base);
 
@@ -260,7 +305,11 @@ export function transformExpectAsync(node: ts.Node, reporter: RefactorReporter):
   return node;
 }
 
-export function transformComplexMatchers(node: ts.Node): ts.Node {
+export function transformComplexMatchers(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   if (
     !ts.isCallExpression(node) ||
     !ts.isPropertyAccessExpression(node.expression) ||
@@ -302,6 +351,11 @@ export function transformComplexMatchers(node: ts.Node): ts.Node {
   }
 
   if (newMatcherName) {
+    reporter.reportTransformation(
+      sourceFile,
+      node,
+      `Transformed \`.toEqual(jasmine.${jasmineMatcherName}())\` to \`.${newMatcherName}()\`.`,
+    );
     let expectExpression = expectCall;
 
     // Handle cases like `expect(...).not.toEqual(jasmine.notEmpty())`
@@ -326,6 +380,7 @@ export function transformComplexMatchers(node: ts.Node): ts.Node {
 
 export function transformArrayWithExactContents(
   node: ts.Node,
+  sourceFile: ts.SourceFile,
   reporter: RefactorReporter,
 ): ts.Node | readonly ts.Node[] {
   if (
@@ -356,6 +411,12 @@ export function transformArrayWithExactContents(
     return node;
   }
 
+  reporter.reportTransformation(
+    sourceFile,
+    node,
+    'Transformed `jasmine.arrayWithExactContents()` to `.toHaveLength()` and `.toEqual(expect.arrayContaining())`.',
+  );
+
   const expectCall = node.expression.expression.expression;
   const arrayLiteral = argument.arguments[0];
 
@@ -383,7 +444,11 @@ export function transformArrayWithExactContents(
   ];
 }
 
-export function transformCalledOnceWith(node: ts.Node): ts.Node | readonly ts.Node[] {
+export function transformCalledOnceWith(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node | readonly ts.Node[] {
   if (!ts.isExpressionStatement(node)) {
     return node;
   }
@@ -396,6 +461,12 @@ export function transformCalledOnceWith(node: ts.Node): ts.Node | readonly ts.No
   ) {
     return node;
   }
+
+  reporter.reportTransformation(
+    sourceFile,
+    node,
+    'Transformed `.toHaveBeenCalledOnceWith()` to `.toHaveBeenCalledTimes(1)` and `.toHaveBeenCalledWith()`.',
+  );
 
   const expectCall = call.expression.expression;
   const args = call.arguments;
@@ -418,7 +489,11 @@ export function transformCalledOnceWith(node: ts.Node): ts.Node | readonly ts.No
   ];
 }
 
-export function transformWithContext(node: ts.Node): ts.Node {
+export function transformWithContext(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) {
     return node;
   }
@@ -446,6 +521,12 @@ export function transformWithContext(node: ts.Node): ts.Node {
   ) {
     return node;
   }
+
+  reporter.reportTransformation(
+    sourceFile,
+    withContextCall,
+    'Transformed `.withContext()` to the `expect(..., message)` syntax.',
+  );
 
   const expectCall = withContextCall.expression.expression;
 
@@ -485,7 +566,11 @@ export function transformWithContext(node: ts.Node): ts.Node {
   return ts.factory.updateCallExpression(node, newExpression, node.typeArguments, node.arguments);
 }
 
-export function transformExpectNothing(node: ts.Node, reporter: RefactorReporter): ts.Node {
+export function transformExpectNothing(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
   if (!ts.isExpressionStatement(node)) {
     return node;
   }
@@ -514,6 +599,7 @@ export function transformExpectNothing(node: ts.Node, reporter: RefactorReporter
   const replacement = ts.factory.createEmptyStatement();
   const originalText = node.getFullText().trim();
 
+  reporter.reportTransformation(sourceFile, node, 'Removed `expect().nothing()` statement.');
   reporter.recordTodo('expect-nothing');
   addTodoComment(
     replacement,
