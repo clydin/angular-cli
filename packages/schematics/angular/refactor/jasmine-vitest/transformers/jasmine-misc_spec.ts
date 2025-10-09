@@ -177,4 +177,29 @@ const env = jasmine.getEnv();`,
       });
     });
   });
+
+  describe('transformGlobalFunctions', () => {
+    const testCases = [
+      {
+        description: 'should add a TODO for setSpecProperty',
+        input: `setSpecProperty('myKey', 'myValue');`,
+        // eslint-disable-next-line max-len
+        expected: `// TODO: vitest-migration: Unsupported global function \`setSpecProperty\` found. This function is used for custom reporters in Jasmine and has no direct equivalent in Vitest.
+setSpecProperty('myKey', 'myValue');`,
+      },
+      {
+        description: 'should add a TODO for setSuiteProperty',
+        input: `setSuiteProperty('myKey', 'myValue');`,
+        // eslint-disable-next-line max-len
+        expected: `// TODO: vitest-migration: Unsupported global function \`setSuiteProperty\` found. This function is used for custom reporters in Jasmine and has no direct equivalent in Vitest.
+setSuiteProperty('myKey', 'myValue');`,
+      },
+    ];
+
+    testCases.forEach(({ description, input, expected }) => {
+      it(description, async () => {
+        await expectTransformation(input, expected);
+      });
+    });
+  });
 });

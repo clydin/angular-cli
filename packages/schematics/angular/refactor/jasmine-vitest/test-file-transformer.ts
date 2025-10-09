@@ -27,6 +27,7 @@ import {
 import {
   transformDefaultTimeoutInterval,
   transformFail,
+  transformGlobalFunctions,
   transformTimerMocks,
   transformUnknownJasmineProperties,
   transformUnsupportedJasmineCalls,
@@ -80,6 +81,7 @@ export function transformJasmineToVitest(
           (node: ts.Node) => transformUnsupportedJasmineCalls(node, sourceFile, reporter),
           (node: ts.Node) => transformPending(node, context, sourceFile, reporter),
           (node: ts.Node) => transformDoneCallback(node, context, sourceFile, reporter),
+          (node: ts.Node) => transformGlobalFunctions(node, sourceFile, reporter),
           (node: ts.Node) => transformtoHaveBeenCalledBefore(node, sourceFile, reporter),
           (node: ts.Node) => transformToHaveClass(node, sourceFile, reporter),
         ];

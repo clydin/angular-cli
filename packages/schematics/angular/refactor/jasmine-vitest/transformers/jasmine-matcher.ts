@@ -51,6 +51,17 @@ export function transformSyntacticSugarMatchers(
   const pae = node.expression;
   const matcherName = pae.name.text;
 
+  if (matcherName === 'toHaveSpyInteractions') {
+    reporter.recordTodo('toHaveSpyInteractions');
+    addTodoComment(
+      node,
+      'Unsupported matcher ".toHaveSpyInteractions()" found. ' +
+        'Please migrate this manually by checking the `mock.calls.length` of the individual spies.',
+    );
+
+    return node;
+  }
+
   if (matcherName === 'toThrowMatching') {
     reporter.recordTodo('toThrowMatching');
     addTodoComment(
@@ -84,6 +95,7 @@ const ASYMMETRIC_MATCHER_NAMES: ReadonlyArray<string> = [
   'stringMatching',
   'objectContaining',
   'arrayContaining',
+  'stringContaining',
 ];
 
 export function transformAsymmetricMatchers(
@@ -295,11 +307,20 @@ export function transformExpectAsync(
   }
 
   if (matcherName) {
-    reporter.recordTodo('unsupported-expect-async-matcher');
-    addTodoComment(
-      node,
-      `Unsupported expectAsync matcher ".${matcherName}()" found. Please migrate this manually.`,
-    );
+    if (matcherName === 'toBePending') {
+      reporter.recordTodo('toBePending');
+      addTodoComment(
+        node,
+        'Unsupported matcher ".toBePending()" found. Vitest does not have a direct equivalent. ' +
+          'Please migrate this manually, for example by using `Promise.race` to check if the promise settles within a short timeout.',
+      );
+    } else {
+      reporter.recordTodo('unsupported-expect-async-matcher');
+      addTodoComment(
+        node,
+        `Unsupported expectAsync matcher ".${matcherName}()" found. Please migrate this manually.`,
+      );
+    }
   }
 
   return node;
@@ -347,6 +368,12 @@ export function transformComplexMatchers(
       newMatcherName = 'toHaveLength';
       newArgs = [ts.factory.createNumericLiteral(0)];
       negate = true;
+      break;
+    case 'is':
+      newMatcherName = 'toBe';
+      if (ts.isCallExpression(argument)) {
+        newArgs = [...argument.arguments];
+      }
       break;
   }
 

@@ -50,6 +50,12 @@ describe('Jasmine to Vitest Transformer', () => {
         input: `expect(foo).toEqual(jasmine.arrayContaining(['a']));`,
         expected: `expect(foo).toEqual(expect.arrayContaining(['a']));`,
       },
+      {
+        description:
+          'should transform jasmine.stringContaining(...) to expect.stringContaining(...)',
+        input: `expect(foo).toEqual(jasmine.stringContaining('substring'));`,
+        expected: `expect(foo).toEqual(expect.stringContaining('substring'));`,
+      },
     ];
 
     testCases.forEach(({ description, input, expected }) => {
@@ -93,6 +99,16 @@ describe('Jasmine to Vitest Transformer', () => {
           // TODO: vitest-migration: Unsupported expectAsync matcher ".toBeSomethingElse()" found. Please migrate this manually.
           await expectAsync(myPromise).toBeSomethingElse();
         `,
+      },
+      {
+        description: 'should add a specific TODO for toBePending',
+        input: `await expectAsync(myPromise).toBePending();`,
+        /* eslint-disable max-len */
+        expected: `
+          // TODO: vitest-migration: Unsupported matcher ".toBePending()" found. Vitest does not have a direct equivalent. Please migrate this manually, for example by using \`Promise.race\` to check if the promise settles within a short timeout.
+          await expectAsync(myPromise).toBePending();
+        `,
+        /* eslint-enable max-len */
       },
     ];
 
@@ -155,6 +171,13 @@ describe('Jasmine to Vitest Transformer', () => {
         expected: `// TODO: vitest-migration: Unsupported matcher ".toThrowMatching()" found. Please migrate this manually.
 expect(() => {}).toThrowMatching((e) => e.message === 'foo');`,
       },
+      {
+        description: 'should add a TODO for toHaveSpyInteractions',
+        input: `expect(mySpyObj).toHaveSpyInteractions();`,
+        // eslint-disable-next-line max-len
+        expected: `// TODO: vitest-migration: Unsupported matcher ".toHaveSpyInteractions()" found. Please migrate this manually by checking the \`mock.calls.length\` of the individual spies.
+expect(mySpyObj).toHaveSpyInteractions();`,
+      },
     ];
 
     testCases.forEach(({ description, input, expected }) => {
@@ -195,6 +218,11 @@ expect(() => {}).toThrowMatching((e) => e.message === 'foo');`,
         description: 'should transform not.toEqual(jasmine.notEmpty()) to toHaveLength(0)',
         input: `expect([]).not.toEqual(jasmine.notEmpty());`,
         expected: `expect([]).toHaveLength(0);`,
+      },
+      {
+        description: 'should transform toEqual(jasmine.is()) to toBe()',
+        input: `expect(value).toEqual(jasmine.is(otherValue));`,
+        expected: `expect(value).toBe(otherValue);`,
       },
     ];
 

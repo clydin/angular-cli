@@ -131,6 +131,33 @@ export function transformDefaultTimeoutInterval(
   return node;
 }
 
+export function transformGlobalFunctions(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  reporter: RefactorReporter,
+): ts.Node {
+  if (
+    ts.isCallExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    (node.expression.text === 'setSpecProperty' || node.expression.text === 'setSuiteProperty')
+  ) {
+    const functionName = node.expression.text;
+    reporter.reportTransformation(
+      sourceFile,
+      node,
+      `Found unsupported global function \`${functionName}\`.`,
+    );
+    reporter.recordTodo(functionName);
+    addTodoComment(
+      node,
+      `Unsupported global function \`${functionName}\` found. This function is used for custom reporters in Jasmine ` +
+        'and has no direct equivalent in Vitest.',
+    );
+  }
+
+  return node;
+}
+
 const JASMINE_UNSUPPORTED_CALLS = new Map<string, string>([
   [
     'addMatchers',

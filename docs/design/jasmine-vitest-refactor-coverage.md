@@ -4,6 +4,12 @@
 
 The transformer provides **substantial coverage** for the most common parts of the Jasmine API, focusing on patterns that have direct or idiomatic equivalents in Vitest. The goal is not 100% automated migration, as some Jasmine features require manual, context-aware refactoring. For unsupported features, the transformer correctly leaves the code as-is and, in many cases, adds a `TODO` comment to guide the developer.
 
+### Status Definitions
+
+- `✅ **Covered**`: The schematic reliably transforms the API into a functional Vitest equivalent.
+- `⚠️ **Partially Covered**`: The schematic attempts a transformation that succeeds for common cases but falls back to adding a `TODO` for more complex or dynamic cases.
+- `❌ **Unsupported**`: The schematic makes no attempt to transform the code. Its only action is to identify the API and add a `TODO` comment explaining that manual migration is required.
+
 ---
 
 ## Detailed API Coverage Breakdown
@@ -45,16 +51,18 @@ The transformer provides **substantial coverage** for the most common parts of t
 
 Most 1:1 matchers (`toBe`, `toEqual`) are left as-is since they are compatible.
 
-| API                         | Status             | Notes                                                                                                                                     |
-| :-------------------------- | :----------------- | :---------------------------------------------------------------------------------------------------------------------------------------- |
-| `expect().nothing()`        | ✅ **Covered**     | The statement is removed and a `TODO` comment is added explaining that it is redundant in Vitest.                                         |
-| `expect().withContext()`    | ✅ **Covered**     | Transformed to the `expect(..., 'message')` syntax.                                                                                       |
-| `expectAsync`               | ✅ **Covered**     | All matchers (`.toBeResolved`, `.toBeRejectedWith`, etc.) are transformed by `transformExpectAsync`.                                      |
-| `toHaveBeenCalledOnceWith`  | ✅ **Covered**     | Transformed into two separate `expect` calls (`toHaveBeenCalledTimes` and `toHaveBeenCalledWith`) by `transformCalledOnceWith`.           |
-| Syntactic Sugar Matchers    | ✅ **Covered**     | `toBeTrue`, `toBeFalse`, `toBePositiveInfinity`, `toBeNegativeInfinity`, `toHaveSize` are handled by `transformSyntacticSugarMatchers`.   |
-| `toThrowMatching`           | ❌ **Unsupported** | A `TODO` comment is added. Vitest's `toThrow` does not accept a predicate function directly.                                              |
-| `toHaveClass` (DOM Matcher) | ✅ **Covered**     | Transformed to `expect(element.classList.contains(...)).toBe(...)`.                                                                       |
-| Most standard matchers      | ✅ **Covered**     | Matchers like `toBe`, `toEqual`, `toContain`, `toThrow`, `toHaveBeenCalled` are compatible with Vitest and do not require transformation. |
+| API                           | Status             | Notes                                                                                                                                     |
+| :---------------------------- | :----------------- | :---------------------------------------------------------------------------------------------------------------------------------------- |
+| `expect().nothing()`          | ✅ **Covered**     | The statement is removed and a `TODO` comment is added explaining that it is redundant in Vitest.                                         |
+| `expect().withContext()`      | ✅ **Covered**     | Transformed to the `expect(..., 'message')` syntax.                                                                                       |
+| `expectAsync`                 | ✅ **Covered**     | All matchers (`.toBeResolved`, `.toBeRejectedWith`, etc.) are transformed by `transformExpectAsync`.                                      |
+| `toHaveBeenCalledOnceWith`    | ✅ **Covered**     | Transformed into two separate `expect` calls (`toHaveBeenCalledTimes` and `toHaveBeenCalledWith`) by `transformCalledOnceWith`.           |
+| Syntactic Sugar Matchers      | ✅ **Covered**     | `toBeTrue`, `toBeFalse`, `toBePositiveInfinity`, `toBeNegativeInfinity`, `toHaveSize` are handled by `transformSyntacticSugarMatchers`.   |
+| `toThrowMatching`             | ❌ **Unsupported** | A `TODO` comment is added. Vitest's `toThrow` does not accept a predicate function directly.                                              |
+| `toHaveClass` (DOM Matcher)   | ✅ **Covered**     | Transformed to `expect(element.classList.contains(...)).toBe(...)`.                                                                       |
+| `toHaveSpyInteractions`       | ❌ **Unsupported** | A specific `TODO` is added, as there is no direct equivalent. Requires manual checking of `mock.calls.length`.                            |
+| `expectAsync().toBePending()` | ❌ **Unsupported** | A specific `TODO` is added, as there is no direct equivalent. Requires manual check with `Promise.race`.                                  |
+| Most standard matchers        | ✅ **Covered**     | Matchers like `toBe`, `toEqual`, `toContain`, `toThrow`, `toHaveBeenCalled` are compatible with Vitest and do not require transformation. |
 
 ### 4. Asymmetric Matchers (`jasmine.any`, etc.)
 
@@ -65,6 +73,8 @@ Most 1:1 matchers (`toBe`, `toEqual`) are left as-is since they are compatible.
 | `jasmine.objectContaining`       | ✅ **Covered**     | Transformed to `expect.objectContaining`.                                                                                             |
 | `jasmine.arrayContaining`        | ✅ **Covered**     | Transformed to `expect.arrayContaining`.                                                                                              |
 | `jasmine.stringMatching`         | ✅ **Covered**     | Transformed to `expect.stringMatching`.                                                                                               |
+| `jasmine.stringContaining`       | ✅ **Covered**     | Transformed to `expect.stringContaining`.                                                                                             |
+| `jasmine.is`                     | ✅ **Covered**     | When used with `toEqual`, transformed to `.toBe()` by `transformComplexMatchers`.                                                     |
 | `jasmine.truthy`, `falsy`        | ✅ **Covered**     | When used with `toEqual`, transformed to `.toBeTruthy()` / `.toBeFalsy()` by `transformComplexMatchers`.                              |
 | `jasmine.arrayWithExactContents` | ✅ **Covered**     | Transformed into two `expect` calls (`toHaveLength` and `toEqual(expect.arrayContaining(...))`) by `transformArrayWithExactContents`. |
 | `jasmine.empty`                  | ✅ **Covered**     | Transformed to `.toHaveLength(0)`.                                                                                                    |
@@ -76,12 +86,12 @@ Most 1:1 matchers (`toBe`, `toEqual`) are left as-is since they are compatible.
 
 This includes miscellaneous and environment-related APIs, which have **limited but intentional coverage**.
 
-| API                                                                      | Status                   | Notes                                                                                                                                                           |
-| :----------------------------------------------------------------------- | :----------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `jasmine.clock`                                                          | ✅ **Covered**           | `install`, `uninstall`, `tick`, and `mockDate` are transformed to their `vi` equivalents by `transformTimerMocks`.                                              |
-| `jasmine.DEFAULT_TIMEOUT_INTERVAL`                                       | ✅ **Covered**           | Transformed to `vi.setConfig({ testTimeout: ... })` by `transformDefaultTimeoutInterval`.                                                                       |
-| `jasmine.addMatchers`                                                    | ❌ **Unsupported**       | A `TODO` is added. This requires manual migration to `expect.extend()`, which has a different structure.                                                        |
-| `jasmine.addCustomEqualityTester`                                        | ❌ **Unsupported**       | A `TODO` is added. This requires manual migration to `expect.addEqualityTesters()`.                                                                             |
-| `jasmine.getEnv` and its methods (`addReporter`, `configure`, `execute`) | ❌ **Unsupported**       | Vitest has a different configuration and reporter system. Requires manual setup.                                                                                |
-| Unknown `jasmine.*` properties                                           | ⚠️ **Partially Covered** | `transformUnknownJasmineProperties` adds a `TODO` for any `jasmine` property that is not explicitly handled by another transformer, preventing silent failures. |
-| `setSpecProperty`, `setSuiteProperty`                                    | ❌ **Unsupported**       | No direct equivalent in Vitest.                                                                                                                                 |
+| API                                                                      | Status             | Notes                                                                                                                                      |
+| :----------------------------------------------------------------------- | :----------------- | :----------------------------------------------------------------------------------------------------------------------------------------- |
+| `jasmine.clock`                                                          | ✅ **Covered**     | `install`, `uninstall`, `tick`, and `mockDate` are transformed to their `vi` equivalents by `transformTimerMocks`.                         |
+| `jasmine.DEFAULT_TIMEOUT_INTERVAL`                                       | ✅ **Covered**     | Transformed to `vi.setConfig({ testTimeout: ... })` by `transformDefaultTimeoutInterval`.                                                  |
+| `jasmine.addMatchers`                                                    | ❌ **Unsupported** | A `TODO` is added. This requires manual migration to `expect.extend()`, which has a different structure.                                   |
+| `jasmine.addCustomEqualityTester`                                        | ❌ **Unsupported** | A `TODO` is added. This requires manual migration to `expect.addEqualityTesters()`.                                                        |
+| `jasmine.getEnv` and its methods (`addReporter`, `configure`, `execute`) | ❌ **Unsupported** | A `TODO` is added. Vitest has a different configuration and reporter system, so this requires manual setup.                                |
+| `setSpecProperty`, `setSuiteProperty`                                    | ❌ **Unsupported** | A specific `TODO` is added. Vitest has no direct equivalent for attaching metadata to test results at runtime.                             |
+| Unknown `jasmine.*` properties                                           | ❌ **Unsupported** | A `TODO` is added for any `jasmine` property not explicitly handled by another transformer. This is a fallback to prevent silent failures. |
