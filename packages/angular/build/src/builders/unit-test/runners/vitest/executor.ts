@@ -178,6 +178,13 @@ export class VitestExecutor implements TestExecutor {
       throw new Error(browserOptions.errors.join('\n'));
     }
 
+    if (browserOptions.providerName === 'preview' && this.options.coverage) {
+      throw new Error(
+        'The "preview" browser provider integration does not support coverage.' +
+          ' Please disable coverage or change to a different browser provider.',
+      );
+    }
+
     assert(
       this.buildResultFiles.size > 0,
       'buildResult must be available before initializing vitest',

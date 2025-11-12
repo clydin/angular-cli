@@ -11,6 +11,7 @@ import type { BrowserBuiltinProvider, BrowserConfigOptions } from 'vitest/node';
 import { assertIsError } from '../../../../utils/error';
 
 export interface BrowserConfiguration {
+  providerName?: BrowserBuiltinProvider;
   browser?: BrowserConfigOptions;
   errors?: string[];
 }
@@ -102,7 +103,7 @@ export async function setupBrowserConfiguration(
   }
 
   if (errors) {
-    return { errors };
+    return { errors, providerName };
   }
 
   const isCI = !!process.env['CI'];
@@ -124,5 +125,5 @@ export async function setupBrowserConfiguration(
     })),
   } satisfies BrowserConfigOptions;
 
-  return { browser };
+  return { browser, providerName };
 }
