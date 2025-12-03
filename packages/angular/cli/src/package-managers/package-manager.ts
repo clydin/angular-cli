@@ -14,7 +14,7 @@
 
 import { join } from 'node:path';
 import npa from 'npm-package-arg';
-import { PackageManagerError } from './error';
+import { ErrorInfo, PackageManagerError } from './error';
 import { Host } from './host';
 import { Logger } from './logger';
 import { PackageManagerDescriptor } from './package-manager-descriptor';
@@ -191,17 +191,45 @@ export class PackageManager {
 
     let stdout;
     let stderr;
+    let exitCode: number | null = null;
+    let parsedError: ErrorInfo | null = null;
+
     try {
       ({ stdout, stderr } = await this.#run(args, runOptions));
     } catch (e) {
-      if (e instanceof PackageManagerError && typeof e.exitCode === 'number' && e.exitCode !== 0) {
-        // Some package managers exit with a non-zero code when the package is not found.
-        if (cache && cacheKey) {
-          cache.set(cacheKey, null);
-        }
-
-        return null;
+      if (!(e instanceof PackageManagerError && typeof e.exitCode === 'number')) {
+        throw e;
       }
+
+      exitCode = e.exitCode;
+      stdout = e.stdout;
+      stderr = e.stderr;
+
+      // Only try to parse errors if exit code is non-zero.
+      if (exitCode !== 0) {
+        parsedError = this.descriptor.outputParsers.getError?.(stderr, this.options.logger) ?? null;
+      }
+
+      if (parsedError) {
+        this.options.logger?.debug(
+          `[${this.descriptor.binary}] Structured error (code: ${parsedError.code}): ${parsedError.summary}`,
+        );
+
+        // Special case for 'not found' errors (e.g., E404). Return null for these.
+        if (this.descriptor.isNotFound(parsedError)) {
+          if (cache && cacheKey) {
+            cache.set(cacheKey, null);
+          }
+
+          return null;
+        } else {
+          // For all other structured errors, re-throw a more informative error.
+          throw new PackageManagerError(parsedError.summary, stdout, stderr, exitCode);
+        }
+      }
+
+      // If no structured error was parsed, rethrow the original PackageManagerError
+      // (this also covers cases where exitCode is 0 but runCommand still threw for other reasons).
       throw e;
     }
 
@@ -216,7 +244,7 @@ export class PackageManager {
       const message = `Failed to parse package manager output: ${
         e instanceof Error ? e.message : ''
       }`;
-      throw new PackageManagerError(message, stdout, stderr, 0);
+      throw new PackageManagerError(message, stdout, stderr, exitCode);
     }
   }
 
