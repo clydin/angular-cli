@@ -287,7 +287,14 @@ async function findAngularCoreVersion(
     const pkgPath = join(currentDir, 'package.json');
     try {
       const pkgContent = await readFile(pkgPath, 'utf-8');
-      const pkg = JSON.parse(pkgContent);
+      let pkg;
+      try {
+        pkg = JSON.parse(pkgContent);
+      } catch (e) {
+        assertIsError(e);
+        throw new Error(`Malformed package.json at ${pkgPath}: ${e.message}`);
+      }
+
       const versionSpecifier =
         pkg.dependencies?.['@angular/core'] ?? pkg.devDependencies?.['@angular/core'];
 
@@ -454,15 +461,8 @@ async function getProjectStyleLanguage(
  */
 async function loadAndParseWorkspace(
   configFile: string,
-  seenPaths: Set<string>,
-): Promise<{ workspace: WorkspaceData | null; error: ParsingError | null }> {
+): Promise<{ workspace: WorkspaceData; error: null } | { workspace: null; error: ParsingError }> {
   try {
-    const resolvedPath = resolve(configFile);
-    if (seenPaths.has(resolvedPath)) {
-      return { workspace: null, error: null }; // Already processed, skip.
-    }
-    seenPaths.add(resolvedPath);
-
     const ws = await AngularWorkspace.load(configFile);
     const projects = [];
     const workspaceRoot = dirname(configFile);
@@ -508,20 +508,15 @@ async function loadAndParseWorkspace(
 async function processConfigFile(
   configFile: string,
   searchRoot: string,
-  seenPaths: Set<string>,
   versionCache: Map<string, string | undefined>,
 ): Promise<{
   workspace?: WorkspaceData;
   parsingError?: ParsingError;
   versioningError?: VersioningError;
 }> {
-  const { workspace, error } = await loadAndParseWorkspace(configFile, seenPaths);
+  const { workspace, error } = await loadAndParseWorkspace(configFile);
   if (error) {
     return { parsingError: error };
-  }
-
-  if (!workspace) {
-    return {}; // Skipped as it was already seen.
   }
 
   try {
@@ -549,7 +544,6 @@ async function createListProjectsHandler({ server }: McpToolContext) {
     const workspaces: WorkspaceData[] = [];
     const parsingErrors: ParsingError[] = [];
     const versioningErrors: z.infer<typeof listProjectsOutputSchema.versioningErrors> = [];
-    const seenPaths = new Set<string>();
     const versionCache = new Map<string, string | undefined>();
 
     let searchRoots: string[];
@@ -574,24 +568,38 @@ async function createListProjectsHandler({ server }: McpToolContext) {
       })
       .filter((r): r is string => r !== null);
 
+    // Collect all unique angular.json files and their best matching search root.
+    // We prefer the shortest search root (closest to the filesystem root) to maximize
+    // the upward search range for package.json version detection.
+    const configFilesToRoot = new Map<string, string>();
+
     for (const root of searchRoots) {
       for await (const configFile of findAngularJsonFiles(root, realAllowedRoots)) {
-        const { workspace, parsingError, versioningError } = await processConfigFile(
-          configFile,
-          root,
-          seenPaths,
-          versionCache,
-        );
+        const resolvedPath = resolve(configFile);
+        const existingRoot = configFilesToRoot.get(resolvedPath);
 
-        if (workspace) {
-          workspaces.push(workspace);
+        if (!existingRoot || root.length < existingRoot.length) {
+          configFilesToRoot.set(resolvedPath, root);
         }
-        if (parsingError) {
-          parsingErrors.push(parsingError);
-        }
-        if (versioningError) {
-          versioningErrors.push(versioningError);
-        }
+      }
+    }
+
+    // Process all unique workspaces in parallel.
+    const results = await Promise.all(
+      Array.from(configFilesToRoot).map(([configFile, searchRoot]) =>
+        processConfigFile(configFile, searchRoot, versionCache),
+      ),
+    );
+
+    for (const { workspace, parsingError, versioningError } of results) {
+      if (workspace) {
+        workspaces.push(workspace);
+      }
+      if (parsingError) {
+        parsingErrors.push(parsingError);
+      }
+      if (versioningError) {
+        versioningErrors.push(versioningError);
       }
     }
 
