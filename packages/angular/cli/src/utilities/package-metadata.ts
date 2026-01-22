@@ -43,7 +43,6 @@ export interface NgPackageManifestProperties {
     migrations?: string;
     packageGroup?: string[] | Record<string, string>;
     packageGroupName?: string;
-    requirements?: string[] | Record<string, string>;
   };
 }
 

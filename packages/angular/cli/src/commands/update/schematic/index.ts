@@ -74,7 +74,6 @@ interface PackageInfo {
 interface UpdateMetadata {
   packageGroupName?: string;
   packageGroup: { [packageName: string]: string };
-  requirements: { [packageName: string]: string };
   migrations?: string;
 }
 
@@ -349,7 +348,6 @@ function _getUpdateMetadata(
 
   const result: UpdateMetadata = {
     packageGroup: {},
-    requirements: {},
   };
 
   if (!metadata || typeof metadata != 'object' || Array.isArray(metadata)) {
@@ -807,7 +805,14 @@ function isPkgFromRegistry(name: string, specifier: string): boolean {
   return !!result.registry;
 }
 
-export default function (options: UpdateSchema): Rule {
+interface ResolvedUpdateInfo {
+  name: string;
+  version: string;
+  installedVersion: string;
+  migrations?: string;
+}
+
+export default function (options: UpdateSchema & { resolvedUpdateInfo?: ResolvedUpdateInfo[] }): Rule {
   if (!options.packages) {
     // We cannot just return this because we need to fetch the packages from NPM still for the
     // help/guide to show.
@@ -831,6 +836,45 @@ export default function (options: UpdateSchema): Rule {
 
   return async (tree: Tree, context: SchematicContext) => {
     const logger = context.logger;
+
+    if (options.resolvedUpdateInfo && options.resolvedUpdateInfo.length > 0) {
+      const infoMap = new Map<string, PackageInfo>();
+      for (const info of options.resolvedUpdateInfo) {
+        infoMap.set(info.name, {
+          name: info.name,
+          npmPackageJson: {
+            name: info.name,
+            versions: {},
+            'dist-tags': {},
+          } as unknown as NpmRepositoryPackageJson,
+          installed: {
+            version: info.installedVersion as VersionRange,
+            packageJson: {
+              name: info.name,
+              version: info.installedVersion,
+            } as PackageManifest,
+            updateMetadata: { packageGroup: {} },
+          },
+          target: {
+            version: info.version as VersionRange,
+            packageJson: {
+              name: info.name,
+              version: info.version,
+            } as PackageManifest,
+            updateMetadata: {
+              packageGroup: {},
+              migrations: info.migrations,
+            },
+          },
+          packageJsonRange: info.installedVersion,
+        });
+      }
+
+      _performUpdate(tree, context, infoMap, logger, !!options.migrateOnly);
+
+      return;
+    }
+
     const npmDeps = new Map(
       _getAllDependencies(tree).filter(([name, specifier]) => {
         try {

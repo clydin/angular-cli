@@ -12,6 +12,7 @@ import { existsSync, promises as fs } from 'node:fs';
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import npa from 'npm-package-arg';
+import * as semver from 'semver';
 import { Argv } from 'yargs';
 import {
   CommandModule,
@@ -24,6 +25,7 @@ import type { InstalledPackage, PackageManager, PackageManifest } from '../../pa
 import { colors } from '../../utilities/color';
 import { disableVersionCheck } from '../../utilities/environment-options';
 import { assertIsError } from '../../utilities/error';
+import { UpdateWorkflow, VersionRange } from './update-workflow';
 import {
   checkCLIVersion,
   coerceVersionNumber,
@@ -416,15 +418,18 @@ export default class UpdateCommandModule extends CommandModule<UpdateCommandArgs
       }
     };
 
-    const requests: {
-      identifier: npa.Result;
-      node: InstalledPackage;
-    }[] = [];
+    const allDependencies = new Map<string, VersionRange>();
+    for (const [name, pkg] of rootDependencies) {
+      allDependencies.set(name, pkg.version as VersionRange);
+    }
 
-    // Validate packages actually are part of the workspace
+    const packagesToUpdateMap = new Map<string, VersionRange>();
     for (const pkg of packages) {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const node = rootDependencies.get(pkg.name!);
+      if (!pkg.name) {
+        continue;
+      }
+
+      const node = rootDependencies.get(pkg.name);
       if (!node) {
         logger.error(`Package '${pkg.name}' is not a dependency.`);
 
@@ -434,66 +439,67 @@ export default class UpdateCommandModule extends CommandModule<UpdateCommandArgs
       // If a specific version is requested and matches the installed version, skip.
       if (pkg.type === 'version' && node.version === pkg.fetchSpec) {
         logger.info(`Package '${pkg.name}' is already at '${pkg.fetchSpec}'.`);
+
         continue;
       }
 
-      requests.push({ identifier: pkg, node });
+      packagesToUpdateMap.set(
+        pkg.name,
+        (pkg.fetchSpec || (options.next ? 'next' : 'latest')) as VersionRange,
+      );
     }
 
-    if (requests.length === 0) {
+    if (packagesToUpdateMap.size === 0) {
       return 0;
     }
 
     logger.info('Fetching dependency metadata from registry...');
 
-    const packagesToUpdate: string[] = [];
-    for (const { identifier: requestIdentifier, node } of requests) {
-      const packageName = requestIdentifier.name;
+    const updateWorkflow = new UpdateWorkflow(packageManager, logger);
+    let packageInfoMap;
 
-      let manifest: PackageManifest | null = null;
-      try {
-        manifest = await packageManager.getManifest(requestIdentifier);
-      } catch (e) {
-        assertIsError(e);
-        logger.error(`Error fetching manifest for '${packageName}': ` + e.message);
+    try {
+      packageInfoMap = await updateWorkflow.analyze(
+        packagesToUpdateMap,
+        allDependencies,
+        options.verbose,
+        options.next,
+        options.force,
+      );
+    } catch (e) {
+      assertIsError(e);
+      logger.error(e.message);
 
-        return 1;
-      }
+      return 1;
+    }
 
-      if (!manifest) {
-        logger.error(
-          `Package specified by '${requestIdentifier.raw}' does not exist within the registry.`,
-        );
+    const resolvedUpdateInfo = [];
+    const packagesToUpdate: string[] = []; // For log / commit message
 
-        return 1;
-      }
-
-      if (manifest.version === node.version) {
-        logger.info(`Package '${packageName}' is already up to date.`);
+    for (const info of packageInfoMap.values()) {
+      if (!info.target) {
         continue;
       }
 
-      if (ANGULAR_PACKAGES_REGEXP.test(node.name)) {
-        const { name, version } = node;
-        const toBeInstalledMajorVersion = +manifest.version.split('.')[0];
-        const currentMajorVersion = +version.split('.')[0];
+      // Major version check logic
+      if (ANGULAR_PACKAGES_REGEXP.test(info.name)) {
+        const currentMajorVersion = semver.major(info.installed.version);
+        const nextMajorVersion = semver.major(info.target.version);
 
-        if (toBeInstalledMajorVersion - currentMajorVersion > 1) {
-          // Only allow updating a single version at a time.
+        if (nextMajorVersion - currentMajorVersion > 1) {
           if (currentMajorVersion < 6) {
-            // Before version 6, the major versions were not always sequential.
-            // Example @angular/core skipped version 3, @angular/cli skipped versions 2-5.
             logger.error(
-              `Updating multiple major versions of '${name}' at once is not supported. Please migrate each major version individually.\n` +
-                `For more information about the update process, see https://update.angular.dev/.`,
+              `Updating multiple major versions of '${info.name}' at once is not supported. ` +
+                'Please migrate each major version individually.\n' +
+                'For more information about the update process, see https://update.angular.dev/.',
             );
           } else {
             const nextMajorVersionFromCurrent = currentMajorVersion + 1;
-
             logger.error(
-              `Updating multiple major versions of '${name}' at once is not supported. Please migrate each major version individually.\n` +
-                `Run 'ng update ${name}@${nextMajorVersionFromCurrent}' in your workspace directory ` +
-                `to update to latest '${nextMajorVersionFromCurrent}.x' version of '${name}'.\n\n` +
+              `Updating multiple major versions of '${info.name}' at once is not supported. ` +
+                'Please migrate each major version individually.\n' +
+                `Run 'ng update ${info.name}@${nextMajorVersionFromCurrent}' in your workspace directory ` +
+                `to update to latest '${nextMajorVersionFromCurrent}.x' version of '${info.name}'.\n\n` +
                 `For more information about the update process, see https://update.angular.dev/?v=${currentMajorVersion}.0-${nextMajorVersionFromCurrent}.0`,
             );
           }
@@ -502,10 +508,17 @@ export default class UpdateCommandModule extends CommandModule<UpdateCommandArgs
         }
       }
 
-      packagesToUpdate.push(requestIdentifier.toString());
+      resolvedUpdateInfo.push({
+        name: info.name,
+        version: info.target.version,
+        installedVersion: info.installed.version,
+        migrations: info.target.updateMetadata.migrations,
+      });
+
+      packagesToUpdate.push(info.name);
     }
 
-    if (packagesToUpdate.length === 0) {
+    if (resolvedUpdateInfo.length === 0) {
       return 0;
     }
 
@@ -519,7 +532,8 @@ export default class UpdateCommandModule extends CommandModule<UpdateCommandArgs
         force: options.force,
         next: options.next,
         packageManager: this.context.packageManager.name,
-        packages: packagesToUpdate,
+        packages: [], // We pass empty packages because we pass resolved info
+        resolvedUpdateInfo,
       },
     );
 

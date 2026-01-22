@@ -47,7 +47,12 @@ export interface NgUpdate {
   /**
    * A list of package names that should be updated together.
    */
-  packageGroup?: string[];
+  packageGroup?: string[] | Record<string, string>;
+
+  /**
+   * The name of the package group.
+   */
+  packageGroupName?: string;
 }
 
 /**

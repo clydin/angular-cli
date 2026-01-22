@@ -58,6 +58,20 @@
       "type": "string",
       "default": "npm",
       "enum": ["npm", "yarn", "pnpm", "bun"]
+    },
+    "resolvedUpdateInfo": {
+      "type": "array",
+      "description": "Pre-calculated update information. If provided, the schematic acts as a writer only.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "version": { "type": "string" },
+          "installedVersion": { "type": "string" },
+          "migrations": { "type": "string" }
+        },
+        "required": ["name", "version", "installedVersion"]
+      }
     }
   },
   "required": []
