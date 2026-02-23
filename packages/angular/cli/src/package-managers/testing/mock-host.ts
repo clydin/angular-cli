@@ -14,6 +14,7 @@ import { Host } from '../host';
  * This class allows for simulating a file system in memory.
  */
 export class MockHost implements Host {
+  readonly requiresQuoting = false;
   private readonly fs = new Map<string, string[] | true>();
 
   constructor(files: Record<string, string[] | true> = {}) {

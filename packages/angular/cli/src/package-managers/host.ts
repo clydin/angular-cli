@@ -25,6 +25,12 @@ import { PackageManagerError } from './error';
  */
 export interface Host {
   /**
+   * Whether shell quoting is required for package manager specifiers.
+   * This is typically true on Windows, where commands are executed in a shell.
+   */
+  readonly requiresQuoting?: boolean;
+
+  /**
    * Creates a directory.
    * @param path The path to the directory.
    * @param options Options for the directory creation.
@@ -101,6 +107,7 @@ export interface Host {
  */
 export const NodeJS_HOST: Host = {
   stat,
+  requiresQuoting: platform() === 'win32',
   mkdir,
   readFile: (path: string) => readFile(path, { encoding: 'utf8' }),
   copyFile: (src, dest) => copyFile(src, dest, constants.COPYFILE_FICLONE),

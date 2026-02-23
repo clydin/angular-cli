@@ -6,20 +6,54 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import { Host } from './host';
-import { PackageManager } from './package-manager';
+import { MANIFEST_FIELDS, PackageManager } from './package-manager';
 import { SUPPORTED_PACKAGE_MANAGERS } from './package-manager-descriptor';
 import { MockHost } from './testing/mock-host';
 
 describe('PackageManager', () => {
-  let host: Host;
+  let host: MockHost;
   let runCommandSpy: jasmine.Spy;
   const descriptor = SUPPORTED_PACKAGE_MANAGERS['npm'];
 
   beforeEach(() => {
     host = new MockHost();
     runCommandSpy = spyOn(host, 'runCommand').and.resolveTo({ stdout: '1.2.3', stderr: '' });
-    host.runCommand = runCommandSpy;
+  });
+
+  describe('getRegistryManifest', () => {
+    it('should quote complex range specifiers when required by the host', async () => {
+      // Simulate a quoting host
+      Object.assign(host, { requiresQuoting: true });
+
+      const pm = new PackageManager(host, '/tmp', descriptor);
+      const manifest = { name: 'foo', version: '1.0.0' };
+      runCommandSpy.and.resolveTo({ stdout: JSON.stringify(manifest), stderr: '' });
+
+      await pm.getRegistryManifest('foo', '>=1.0.0 <2.0.0');
+
+      expect(runCommandSpy).toHaveBeenCalledWith(
+        descriptor.binary,
+        [...descriptor.getManifestCommand, '"foo@>=1.0.0 <2.0.0"', ...MANIFEST_FIELDS],
+        jasmine.anything(),
+      );
+    });
+
+    it('should NOT quote complex range specifiers when not required by the host', async () => {
+      // Simulate a non-quoting host
+      Object.assign(host, { requiresQuoting: false });
+
+      const pm = new PackageManager(host, '/tmp', descriptor);
+      const manifest = { name: 'foo', version: '1.0.0' };
+      runCommandSpy.and.resolveTo({ stdout: JSON.stringify(manifest), stderr: '' });
+
+      await pm.getRegistryManifest('foo', '>=1.0.0 <2.0.0');
+
+      expect(runCommandSpy).toHaveBeenCalledWith(
+        descriptor.binary,
+        [...descriptor.getManifestCommand, 'foo@>=1.0.0 <2.0.0', ...MANIFEST_FIELDS],
+        jasmine.anything(),
+      );
+    });
   });
 
   describe('getVersion', () => {

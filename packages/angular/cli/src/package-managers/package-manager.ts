@@ -34,7 +34,7 @@ const METADATA_FIELDS = ['name', 'dist-tags', 'versions', 'time'] as const;
  * This is a performance optimization to avoid downloading unnecessary data.
  * These fields are the ones required by the CLI for operations like `ng add` and `ng update`.
  */
-const MANIFEST_FIELDS = [
+export const MANIFEST_FIELDS = [
   'name',
   'version',
   'deprecated',
@@ -444,7 +444,9 @@ export class PackageManager {
     version: string,
     options: { timeout?: number; registry?: string; bypassCache?: boolean } = {},
   ): Promise<PackageManifest | null> {
-    const specifier = `${packageName}@${version}`;
+    const specifier = this.host.requiresQuoting
+      ? `"${packageName}@${version}"`
+      : `${packageName}@${version}`;
     const commandArgs = [...this.descriptor.getManifestCommand, specifier];
     const formatter = this.descriptor.viewCommandFieldArgFormatter;
     if (formatter) {
