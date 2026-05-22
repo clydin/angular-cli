@@ -8,6 +8,7 @@
 
 import { getCommandErrorLogs } from '../../utils';
 import type { McpToolContext } from '../tool-registry';
+import { getStatusMatcher } from './matchers';
 import { serializeOptions } from './options-serializer';
 import type { TargetStrategy } from './strategy';
 import type { RunTargetOutput, StrategyExecutionContext } from './types';
@@ -33,6 +34,27 @@ export class BuildTargetStrategy implements TargetStrategy {
     }
 
     args.push(...serializeOptions(input.options));
+
+    // Delegate long-running watched background builds to the WatchedTargetManager
+    if (input.options?.['watch'] === true) {
+      const activeTarget = context.watchedTargetManager.startOrUpdate(
+        {
+          workspacePath: input.workspacePath,
+          projectName: input.projectName,
+          targetName: input.targetName,
+          statusMatcher: getStatusMatcher(input.targetDefinition?.builder),
+          instanceId: input.instanceId,
+          options: input.options,
+          args,
+        },
+        context.host,
+      );
+
+      return {
+        status: 'success',
+        logs: activeTarget.logs,
+      };
+    }
 
     let status: 'success' | 'failure' = 'success';
     let logs: string[];

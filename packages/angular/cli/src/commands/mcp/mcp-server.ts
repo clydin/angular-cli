@@ -12,7 +12,6 @@ import { join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AngularWorkspace } from '../../utilities/config';
 import { VERSION } from '../../utilities/version';
-import type { Devserver } from './devserver';
 import { LocalWorkspaceHost, createRootRestrictedHost } from './host';
 import { registerInstructionsResource } from './resources/instructions';
 import { AI_TUTOR_TOOL } from './tools/ai-tutor';
@@ -24,6 +23,7 @@ import { DOC_SEARCH_TOOL } from './tools/doc-search';
 import { ZONELESS_MIGRATION_TOOL } from './tools/onpush-zoneless-migration/zoneless-migration';
 import { LIST_PROJECTS_TOOL } from './tools/projects';
 import { RUN_TARGET_TOOL } from './tools/run-target/run-target';
+import { WatchedTargetManager } from './tools/run-target/watched-target-manager';
 import { type AnyMcpToolDeclaration, registerTools } from './tools/tool-registry';
 
 /**
@@ -154,13 +154,19 @@ for equivalent actions.
     })();
   };
 
+  const watchedTargetManager = new WatchedTargetManager();
+
+  process.on('exit', () => {
+    watchedTargetManager.stopAll();
+  });
+
   await registerTools(
     server,
     {
       workspace: options.workspace,
       logger,
       exampleDatabasePath: join(__dirname, '../../../lib/code-examples.db'),
-      devservers: new Map<string, Devserver>(),
+      watchedTargetManager,
       host: restrictedHost,
     },
     toolDeclarations,

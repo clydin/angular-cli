@@ -39,6 +39,7 @@ export async function runTarget(input: RunTargetInput, context: McpToolContext) 
       targetName: input.target,
       targetDefinition,
       configuration: input.configuration,
+      instanceId: input.instanceId,
       options: input.options,
     },
     context,
@@ -52,11 +53,12 @@ export const RUN_TARGET_TOOL = declareTool({
   title: 'Run Project Target',
   description: `
 <Purpose>
-Executes a configured target (such as build, test, lint, e2e) for an Angular project.
+Executes a configured target (such as build, test, serve, lint, e2e) for an Angular project.
 This is the single, unified interface for executing all project tasks natively.
 </Purpose>
 <Use Cases>
 * Building an application or library.
+* Starting a watched development server (e.g., 'serve') in the background.
 * Running unit tests, E2E tests, or linters.
 * Deploying or running custom workspace targets discovered via 'list_projects'.
 </Use Cases>
@@ -65,8 +67,10 @@ This is the single, unified interface for executing all project tasks natively.
 * Headless Testing: For official builders, the test target automatically runs in headless mode
   and disables watch mode to guarantee clean execution.
 * Output Paths: For official builders, successful builds return the build directory in 'outputPath' under the extensions metadata.
-* Watch mode (serve target or watch options) is NOT yet supported in this version of run_target.
-  You MUST use the legacy 'devserver.*' tools for background server lifecycles.
+* Watched Background Processes: Watch mode (e.g. the 'serve' target or passing 'watch: true' in options) is supported.
+  Spawning a watched target returns a success status immediately while the process runs continuously in the background.
+* Isolating Concurrent Instances: For watched processes, you can optionally supply an 'instanceId' (e.g., 'preview', 'testing')
+  to run multiple background instances of the exact same target concurrently. Do NOT pass 'instanceId' for one-off runs.
 </Operational Notes>`,
   isReadOnly: false,
   isLocalOnly: true,

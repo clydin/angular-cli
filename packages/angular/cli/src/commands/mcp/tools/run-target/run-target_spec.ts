@@ -69,12 +69,15 @@ describe('Run Target Tool', () => {
 
   it('should map string and number options correctly to CLI flags and auto-inject no-watch', async () => {
     mockContext.workspace.extensions['defaultProject'] = 'my-app';
+    mockContext.workspace.projects.get('my-app')?.targets.set('test', {
+      builder: '@angular-devkit/build-angular:karma',
+    });
     await runTarget(
       { target: 'test', options: { browsers: 'ChromeHeadless', timeout: 5000 } },
       mockContext,
     );
     expect(mockHost.executeNgCommand).toHaveBeenCalledWith(
-      ['test', 'my-app', '--browsers=ChromeHeadless', '--timeout=5000', '--no-watch'],
+      ['test', 'my-app', '--browsers', 'ChromeHeadless', '--watch', 'false', '--timeout=5000'],
       { cwd: '/test' },
     );
   });
@@ -90,10 +93,14 @@ describe('Run Target Tool', () => {
 
   it('should automatically inject no-watch for test target even if no options provided', async () => {
     mockContext.workspace.extensions['defaultProject'] = 'my-app';
-    await runTarget({ target: 'test' }, mockContext);
-    expect(mockHost.executeNgCommand).toHaveBeenCalledWith(['test', 'my-app', '--no-watch'], {
-      cwd: '/test',
+    mockContext.workspace.projects.get('my-app')?.targets.set('test', {
+      builder: '@angular-devkit/build-angular:karma',
     });
+    await runTarget({ target: 'test' }, mockContext);
+    expect(mockHost.executeNgCommand).toHaveBeenCalledWith(
+      ['test', 'my-app', '--browsers', 'ChromeHeadless', '--watch', 'false'],
+      { cwd: '/test' },
+    );
   });
 
   it('should throw an error if option key is malformed (contains whitespace/special chars)', async () => {
@@ -132,17 +139,37 @@ describe('Run Target Tool', () => {
     expect(structuredContent.logs).toEqual([...executionLogs, 'Lint failed']);
   });
 
-  it('should throw an error if attempting to run the serve target', async () => {
+  it('should successfully route serve target to WatchedTargetManager in the background', async () => {
     mockContext.workspace.extensions['defaultProject'] = 'my-app';
-    await expectAsync(runTarget({ target: 'serve' }, mockContext)).toBeRejectedWithError(
-      /Watch mode execution.*is not yet supported/,
-    );
+    const mockProcess = jasmine.createSpyObj('ChildProcess', ['kill', 'on']);
+    mockProcess.stdout = jasmine.createSpyObj('stdout', ['on']);
+    mockProcess.stderr = jasmine.createSpyObj('stderr', ['on']);
+    mockHost.startNgProcess.and.returnValue(mockProcess);
+
+    const { structuredContent } = await runTarget({ target: 'serve' }, mockContext);
+
+    expect(mockHost.startNgProcess).toHaveBeenCalledWith(['serve', 'my-app'], {
+      cwd: '/test',
+    });
+    expect(structuredContent.status).toBe('success');
+    expect(structuredContent.logs).toEqual([]);
   });
 
-  it('should throw an error if attempting to run a target with watch option true', async () => {
+  it('should successfully route build target with watch option true to WatchedTargetManager in the background', async () => {
     mockContext.workspace.extensions['defaultProject'] = 'my-app';
-    await expectAsync(
-      runTarget({ target: 'build', options: { watch: true } }, mockContext),
-    ).toBeRejectedWithError(/Watch mode execution.*is not yet supported/);
+    const mockProcess = jasmine.createSpyObj('ChildProcess', ['kill', 'on']);
+    mockProcess.stdout = jasmine.createSpyObj('stdout', ['on']);
+    mockProcess.stderr = jasmine.createSpyObj('stderr', ['on']);
+    mockHost.startNgProcess.and.returnValue(mockProcess);
+
+    const { structuredContent } = await runTarget(
+      { target: 'build', options: { watch: true } },
+      mockContext,
+    );
+
+    expect(mockHost.startNgProcess).toHaveBeenCalledWith(['build', 'my-app', '--watch'], {
+      cwd: '/test',
+    });
+    expect(structuredContent.status).toBe('success');
   });
 });

@@ -27,6 +27,10 @@ export const runTargetInputSchema = z.object({
     .string()
     .optional()
     .describe('Target configuration (e.g., "development", "production").'),
+  instanceId: z
+    .string()
+    .optional()
+    .describe('Optional identifier to isolate concurrent background instances of the same target.'),
   options: z
     .record(z.string(), optionValueSchema)
     .optional()
@@ -46,6 +50,12 @@ export const runTargetOutputSchema = z.object({
 
 export type RunTargetOutput = z.infer<typeof runTargetOutputSchema>;
 
+export interface StatusMatcher {
+  startRegexes: RegExp[];
+  successRegexes: RegExp[];
+  failureRegexes: RegExp[];
+}
+
 export interface StrategyExecutionContext {
   workspacePath: string;
   projectName: string;
@@ -56,5 +66,6 @@ export interface StrategyExecutionContext {
     configurations?: Record<string, Record<string, unknown> | undefined>;
   };
   configuration?: string;
+  instanceId?: string;
   options?: Record<string, OptionValue>;
 }

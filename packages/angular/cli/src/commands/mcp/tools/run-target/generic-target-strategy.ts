@@ -8,6 +8,7 @@
 
 import { getCommandErrorLogs } from '../../utils';
 import type { McpToolContext } from '../tool-registry';
+import { getStatusMatcher } from './matchers';
 import { serializeOptions } from './options-serializer';
 import type { TargetStrategy } from './strategy';
 import type { RunTargetOutput, StrategyExecutionContext } from './types';
@@ -31,13 +32,6 @@ export class GenericTargetStrategy implements TargetStrategy {
     input: StrategyExecutionContext,
     context: McpToolContext,
   ): Promise<RunTargetOutput> {
-    if (input.targetName === 'serve' || input.options?.['watch'] === true) {
-      throw new Error(
-        `Watch mode execution (serve target or watch option) is not yet supported by 'run_target'. ` +
-          `Please use the legacy 'devserver.start' / 'devserver.wait_for_build' tools instead.`,
-      );
-    }
-
     const args: string[] = [];
     if (BUILT_IN_COMMANDS.has(input.targetName)) {
       args.push(input.targetName, input.projectName);
@@ -49,15 +43,28 @@ export class GenericTargetStrategy implements TargetStrategy {
       args.push('-c', input.configuration);
     }
 
-    let options = input.options;
-    if (input.targetName === 'test') {
-      options = {
-        ...options,
-        watch: false,
+    args.push(...serializeOptions(input.options));
+
+    // Delegate long-running watched background targets to the WatchedTargetManager
+    if (input.targetName === 'serve' || input.options?.['watch'] === true) {
+      const activeTarget = context.watchedTargetManager.startOrUpdate(
+        {
+          workspacePath: input.workspacePath,
+          projectName: input.projectName,
+          targetName: input.targetName,
+          statusMatcher: getStatusMatcher(input.targetDefinition?.builder),
+          instanceId: input.instanceId,
+          options: input.options,
+          args,
+        },
+        context.host,
+      );
+
+      return {
+        status: 'success',
+        logs: activeTarget.logs,
       };
     }
-
-    args.push(...serializeOptions(options));
 
     let status: 'success' | 'failure' = 'success';
     let logs: string[];

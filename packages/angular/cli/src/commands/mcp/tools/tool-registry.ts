@@ -10,8 +10,8 @@ import type { McpServer, ToolCallback } from '@modelcontextprotocol/sdk/server/m
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types';
 import type { ZodRawShape } from 'zod';
 import type { AngularWorkspace } from '../../../utilities/config';
-import type { Devserver } from '../devserver';
 import type { Host } from '../host';
+import type { WatchedTargetManager } from './run-target/watched-target-manager';
 
 type ToolConfig = Parameters<McpServer['registerTool']>[1];
 
@@ -20,7 +20,7 @@ export interface McpToolContext {
   workspace?: AngularWorkspace;
   logger: { warn(text: string): void };
   exampleDatabasePath?: string;
-  devservers: Map<string, Devserver>;
+  watchedTargetManager: WatchedTargetManager;
   host: Host;
 }
 
