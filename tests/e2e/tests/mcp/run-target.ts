@@ -77,6 +77,45 @@ export default async function () {
       );
       assert.match(stdoutTestCall, /"status":\s*"success"/);
     }
+
+    // 5. Launch devserver via run_target serve, await build, and terminate it cleanly
+    const { stdout: stdoutServe } = await runInspector(
+      '-E',
+      'run_target',
+      '--method',
+      'tools/call',
+      '--tool-name',
+      'run_target',
+      '--tool-arg',
+      'target=serve',
+    );
+    assert.match(stdoutServe, /"status":\s*"success"/);
+
+    // Await devserver compilation complete
+    const { stdout: stdoutWait } = await runInspector(
+      '-E',
+      'run_target',
+      '--method',
+      'tools/call',
+      '--tool-name',
+      'watched_target.wait',
+      '--tool-arg',
+      '{"target":"serve","timeout":60000}',
+    );
+    assert.match(stdoutWait, /"status":\s*"success"/);
+
+    // Terminate the devserver
+    const { stdout: stdoutStop } = await runInspector(
+      '-E',
+      'run_target',
+      '--method',
+      'tools/call',
+      '--tool-name',
+      'watched_target.stop',
+      '--tool-arg',
+      'target=serve',
+    );
+    assert.match(stdoutStop, /"status":\s*"success"/);
   } finally {
     // 5. Clean up global installation
     await silentNpm('uninstall', '-g', MCP_INSPECTOR_PACKAGE_NAME);

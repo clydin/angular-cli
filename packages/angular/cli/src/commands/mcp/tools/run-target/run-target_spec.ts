@@ -72,10 +72,7 @@ describe('Run Target Tool', () => {
     mockContext.workspace.projects.get('my-app')?.targets.set('test', {
       builder: '@angular-devkit/build-angular:karma',
     });
-    await runTarget(
-      { target: 'test', options: { browsers: 'ChromeHeadless', timeout: 5000 } },
-      mockContext,
-    );
+    await runTarget({ target: 'test', options: { timeout: 5000 } }, mockContext);
     expect(mockHost.executeNgCommand).toHaveBeenCalledWith(
       ['test', 'my-app', '--browsers', 'ChromeHeadless', '--watch', 'false', '--timeout=5000'],
       { cwd: '/test' },
@@ -141,35 +138,43 @@ describe('Run Target Tool', () => {
 
   it('should successfully route serve target to WatchedTargetManager in the background', async () => {
     mockContext.workspace.extensions['defaultProject'] = 'my-app';
-    const mockProcess = jasmine.createSpyObj('ChildProcess', ['kill', 'on']);
-    mockProcess.stdout = jasmine.createSpyObj('stdout', ['on']);
-    mockProcess.stderr = jasmine.createSpyObj('stderr', ['on']);
-    mockHost.startNgProcess.and.returnValue(mockProcess);
+    mockContext.watchedTargetManager.startOrUpdate.and.returnValue({
+      logs: [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
 
     const { structuredContent } = await runTarget({ target: 'serve' }, mockContext);
 
-    expect(mockHost.startNgProcess).toHaveBeenCalledWith(['serve', 'my-app'], {
-      cwd: '/test',
-    });
+    expect(mockContext.watchedTargetManager.startOrUpdate).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        targetName: 'serve',
+        args: ['serve', 'my-app'],
+      }),
+      mockContext.host,
+    );
     expect(structuredContent.status).toBe('success');
     expect(structuredContent.logs).toEqual([]);
   });
 
   it('should successfully route build target with watch option true to WatchedTargetManager in the background', async () => {
     mockContext.workspace.extensions['defaultProject'] = 'my-app';
-    const mockProcess = jasmine.createSpyObj('ChildProcess', ['kill', 'on']);
-    mockProcess.stdout = jasmine.createSpyObj('stdout', ['on']);
-    mockProcess.stderr = jasmine.createSpyObj('stderr', ['on']);
-    mockHost.startNgProcess.and.returnValue(mockProcess);
+    mockContext.watchedTargetManager.startOrUpdate.and.returnValue({
+      logs: [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
 
     const { structuredContent } = await runTarget(
       { target: 'build', options: { watch: true } },
       mockContext,
     );
 
-    expect(mockHost.startNgProcess).toHaveBeenCalledWith(['build', 'my-app', '--watch'], {
-      cwd: '/test',
-    });
+    expect(mockContext.watchedTargetManager.startOrUpdate).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        targetName: 'build',
+        args: ['build', 'my-app', '--watch'],
+      }),
+      mockContext.host,
+    );
     expect(structuredContent.status).toBe('success');
   });
 });

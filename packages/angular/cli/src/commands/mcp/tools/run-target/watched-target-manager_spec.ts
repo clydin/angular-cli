@@ -7,6 +7,7 @@
  */
 
 import type { ChildProcess } from 'node:child_process';
+import { PassThrough } from 'node:stream';
 import type { Host } from '../../host';
 import { getStatusMatcher } from './matchers';
 import { WatchedTargetManager } from './watched-target-manager';
@@ -22,8 +23,10 @@ describe('WatchedTargetManager', () => {
     spawnedCount = 0;
 
     mockProcess = jasmine.createSpyObj<ChildProcess>('ChildProcess', ['kill', 'on']);
-    mockProcess.stdout = jasmine.createSpyObj('stdout', ['on']);
-    mockProcess.stderr = jasmine.createSpyObj('stderr', ['on']);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockProcess.stdout = new PassThrough() as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockProcess.stderr = new PassThrough() as any;
 
     mockHost = jasmine.createSpyObj<Host>('Host', ['startNgProcess']);
     mockHost.startNgProcess.and.callFake(() => {
@@ -51,6 +54,7 @@ describe('WatchedTargetManager', () => {
     );
 
     expect(mockHost.startNgProcess).toHaveBeenCalledWith(['serve', 'my-app', '--port=4200'], {
+      stdio: 'pipe',
       cwd: '/test',
     });
     expect(spawnedCount).toBe(1);

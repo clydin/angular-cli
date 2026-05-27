@@ -9,7 +9,6 @@
 import { workspaces } from '@angular-devkit/core';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { AngularWorkspace } from '../../../utilities/config';
-import { type Devserver } from '../devserver';
 import { Host } from '../host';
 import { McpToolContext } from '../tools/tool-registry';
 import { MockHost } from './mock-host';
@@ -51,6 +50,8 @@ export interface MockContextOptions {
  */
 export interface MockMcpToolContext extends McpToolContext {
   workspace: AngularWorkspace;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  watchedTargetManager: jasmine.SpyObj<any>;
 }
 
 /**
@@ -73,7 +74,13 @@ export function createMockContext(options: MockContextOptions = {}): {
     server: {} as unknown as McpServer,
     workspace,
     logger: { warn: () => {} },
-    devservers: new Map<string, Devserver>(),
+    watchedTargetManager: jasmine.createSpyObj('WatchedTargetManager', [
+      'startOrUpdate',
+      'get',
+      'stop',
+      'stopAll',
+      'list',
+    ]),
     host,
   };
 

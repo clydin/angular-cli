@@ -21,6 +21,8 @@ import { ZONELESS_MIGRATION_TOOL } from './tools/onpush-zoneless-migration/zonel
 import { LIST_PROJECTS_TOOL } from './tools/projects';
 import { RUN_TARGET_TOOL } from './tools/run-target/run-target';
 import { WatchedTargetManager } from './tools/run-target/watched-target-manager';
+import { WATCHED_TARGET_STOP_TOOL } from './tools/run-target/watched-target-stop';
+import { WATCHED_TARGET_WAIT_TOOL } from './tools/run-target/watched-target-wait';
 import { type AnyMcpToolDeclaration, registerTools } from './tools/tool-registry';
 
 /**
@@ -39,7 +41,11 @@ const STABLE_TOOLS = [
  * The set of tools that are available but not enabled by default.
  * These tools are considered experimental and may have limitations.
  */
-export const EXPERIMENTAL_TOOLS = [RUN_TARGET_TOOL] as const;
+export const EXPERIMENTAL_TOOLS = [
+  RUN_TARGET_TOOL,
+  WATCHED_TARGET_WAIT_TOOL,
+  WATCHED_TARGET_STOP_TOOL,
+] as const;
 
 /**
  * Experimental tools that are grouped together under a single name.

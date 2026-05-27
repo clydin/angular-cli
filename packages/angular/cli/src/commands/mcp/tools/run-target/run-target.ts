@@ -67,8 +67,11 @@ This is the single, unified interface for executing all project tasks natively.
 * Headless Testing: For official builders, the test target automatically runs in headless mode
   and disables watch mode to guarantee clean execution.
 * Output Paths: For official builders, successful builds return the build directory in 'outputPath' under the extensions metadata.
-* Watched Background Processes: Watch mode (e.g. the 'serve' target or passing 'watch: true' in options) is supported.
+* Watched Background Processes: Watch mode (e.g., the 'serve' target or passing 'watch: true' in options) is supported.
   Spawning a watched target returns a success status immediately while the process runs continuously in the background.
+* Awaiting Rebuilds: After initiating a watched target, use the companion 'watched_target.wait' tool to await successful
+  recompilation or inspect log results.
+* Terminating Background Targets: Use the companion 'watched_target.stop' tool to cleanly shut down background processes.
 * Isolating Concurrent Instances: For watched processes, you can optionally supply an 'instanceId' (e.g., 'preview', 'testing')
   to run multiple background instances of the exact same target concurrently. Do NOT pass 'instanceId' for one-off runs.
 </Operational Notes>`,
