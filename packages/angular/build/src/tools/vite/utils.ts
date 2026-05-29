@@ -162,6 +162,15 @@ export function updateExternalMetadata(
   externalMetadata.implicitServer.push(...implicitServerFiltered);
   externalMetadata.implicitBrowser.push(...implicitBrowserFiltered);
 
+  if (explicitPackagesOnly) {
+    const requiredTestingDeps = ['@angular/core/testing', '@angular/platform-browser/testing'];
+    for (const dep of requiredTestingDeps) {
+      if (!externalMetadata.implicitBrowser.includes(dep)) {
+        externalMetadata.implicitBrowser.push(dep);
+      }
+    }
+  }
+
   // The below needs to be sorted as Vite uses these options as part of the hashing invalidation algorithm.
   // See: https://github.com/vitejs/vite/blob/0873bae0cfe0f0718ad2f5743dd34a17e4ab563d/packages/vite/src/node/optimizer/index.ts#L1203-L1239
   externalMetadata.explicitBrowser.sort();

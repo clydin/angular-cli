@@ -221,8 +221,12 @@ export async function getVitestBuildOptions(
   entryPoints.set('init-testbed', 'angular:test-bed-init');
   entryPoints.set('vitest-mock-patch', 'angular:vitest-mock-patch');
 
-  // The 'vitest' package is always external for testing purposes
-  const externalDependencies = ['vitest'];
+  // The 'vitest' package and Angular testing entry points are always external for testing purposes
+  const externalDependencies = [
+    'vitest',
+    '@angular/core/testing',
+    '@angular/platform-browser/testing',
+  ];
   if (baseBuildOptions.externalDependencies) {
     externalDependencies.push(...baseBuildOptions.externalDependencies);
   }
