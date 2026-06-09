@@ -52,9 +52,7 @@ export interface PackageManifest extends Manifest, NgPackageManifestProperties {
   peerDependenciesMeta?: Record<string, { optional?: boolean }>;
 }
 
-interface PackageManagerOptions extends Record<string, unknown> {
-  forceAuth?: Record<string, unknown>;
-}
+interface PackageManagerOptions extends Record<string, unknown> {}
 
 let npmrc: PackageManagerOptions;
 const npmPackageJsonCache = new Map<string, Promise<Partial<NpmRepositoryPackageJson>>>();
@@ -185,8 +183,7 @@ function normalizeOptions(
       case 'password':
       case '_auth':
       case 'auth':
-        options['forceAuth'] ??= {};
-        options['forceAuth'][key] = substitutedValue;
+        options[key] = substitutedValue;
         break;
       case 'noproxy':
       case 'no-proxy':
@@ -226,6 +223,73 @@ function normalizeOptions(
   return options;
 }
 
+export function scopeAuthOptions(
+  options: Record<string, unknown>,
+  registries: string[],
+): Record<string, unknown> {
+  const result = { ...options };
+
+  // Resolve potential unscoped authentication keys
+  const token = options['_authToken'] ?? options['_authtoken'] ?? options['token'];
+  const username = options['username'];
+  const password = options['password'] ?? options['_password'];
+  const auth = options['_auth'] ?? options['auth'];
+  const certfile = options['certfile'] ?? options['cafile'];
+  const keyfile = options['keyfile'];
+
+  if (
+    token === undefined &&
+    username === undefined &&
+    password === undefined &&
+    auth === undefined &&
+    certfile === undefined &&
+    keyfile === undefined
+  ) {
+    return result;
+  }
+
+  for (const registryUrl of registries) {
+    try {
+      const parsed = new URL(registryUrl);
+      const regKey = `//${parsed.host}${parsed.pathname}`;
+
+      // If the registry already has any auth settings configured, skip scoping unscoped fallbacks to it.
+      const hasRegistryAuth =
+        options[`${regKey}:_authToken`] !== undefined ||
+        options[`${regKey}:username`] !== undefined ||
+        options[`${regKey}:_password`] !== undefined ||
+        options[`${regKey}:_auth`] !== undefined ||
+        options[`${regKey}:certfile`] !== undefined ||
+        options[`${regKey}:keyfile`] !== undefined;
+
+      if (hasRegistryAuth) {
+        continue;
+      }
+
+      if (token !== undefined) {
+        result[`${regKey}:_authToken`] = token;
+      }
+      if (username !== undefined) {
+        result[`${regKey}:username`] = username;
+      }
+      if (password !== undefined) {
+        result[`${regKey}:_password`] = password;
+      }
+      if (auth !== undefined) {
+        result[`${regKey}:_auth`] = auth;
+      }
+      if (certfile !== undefined) {
+        result[`${regKey}:certfile`] = certfile;
+      }
+      if (keyfile !== undefined) {
+        result[`${regKey}:keyfile`] = keyfile;
+      }
+    } catch {}
+  }
+
+  return result;
+}
+
 export async function getNpmPackageJson(
   packageName: string,
   logger: logging.LoggerApi,
@@ -242,10 +306,26 @@ export async function getNpmPackageJson(
 
   const { usingYarn = false, verbose = false, registry } = options;
   ensureNpmrc(logger, usingYarn, verbose);
+
+  const registries = new Set<string>();
+  if (registry) {
+    registries.add(registry);
+  }
+  if (typeof npmrc.registry === 'string') {
+    registries.add(npmrc.registry);
+  }
+  registries.add('https://registry.npmjs.org/');
+
+  for (const [key, value] of Object.entries(npmrc)) {
+    if (key.startsWith('@') && key.endsWith(':registry') && typeof value === 'string') {
+      registries.add(value);
+    }
+  }
+
   const { packument } = await import('pacote');
   const response = packument(packageName, {
     fullMetadata: true,
-    ...npmrc,
+    ...scopeAuthOptions(npmrc, Array.from(registries)),
     ...(registry ? { registry } : {}),
   }).then((response) => {
     // While pacote type declares that versions cannot be undefined this is not the case.
