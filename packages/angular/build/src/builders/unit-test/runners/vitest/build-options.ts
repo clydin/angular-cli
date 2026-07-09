@@ -35,6 +35,7 @@ function createTestBedInitVirtualFile(
   teardown: boolean,
   zoneTestingStrategy: 'none' | 'static' | 'dynamic' | 'dynamic-zone',
   hasLocalize: boolean,
+  isAot: boolean,
 ): string {
   let providersImport = 'const providers = [];';
   if (providersFile) {
@@ -127,6 +128,55 @@ function createTestBedInitVirtualFile(
         errorOnUnknownProperties: true,
         ${teardown === false ? 'teardown: { destroyAfterEach: false },' : ''}
       });
+
+      ${
+        isAot
+          ? `
+      const originalOverrideComponent = getTestBed().overrideComponent;
+      const warnTracker = new Set();
+      const unsafeKeys = new Set([
+        'template',
+        'templateUrl',
+        'imports',
+        'declarations',
+        'exports',
+        'schemas',
+        'changeDetection',
+        'styleUrls',
+        'styleUrl',
+        'styles',
+        'animations',
+        'encapsulation',
+      ]);
+      function hasUnsafeOverride(override) {
+        if (!override) return false;
+        for (const key of ['add', 'remove', 'set']) {
+          const value = override[key];
+          if (value && typeof value === 'object') {
+            for (const prop of Object.keys(value)) {
+              if (unsafeKeys.has(prop)) {
+                return true;
+              }
+            }
+          }
+        }
+        return false;
+      }
+      getTestBed().overrideComponent = function (component, override) {
+        const isAotComponent = !!component.ɵcmp;
+        if (isAotComponent && hasUnsafeOverride(override) && !warnTracker.has(component)) {
+          warnTracker.add(component);
+          console.warn(
+            \`[Angular] WARNING: 'TestBed.overrideComponent' was called on '\${component.name}' with template/import/schema overrides in AOT mode. \` +
+            \`This is not fully supported and may cause NG0304/NG0303 element resolution errors. \\n\` +
+            \`👉 Workaround: Set 'aot: false' in the build configuration used for tests (e.g. 'buildTarget' in angular.json).\`
+          );
+        }
+        return originalOverrideComponent.call(this, component, override);
+      };
+      `
+          : ''
+      }
     }
   `;
 }
@@ -279,6 +329,7 @@ export async function getVitestBuildOptions(
     !options.debug,
     zoneTestingStrategy,
     hasLocalize,
+    buildOptions.aot !== false,
   );
 
   const mockPatchContents = `
