@@ -1,3 +1,23 @@
+<a name="22.0.6"></a>
+
+# 22.0.6 (2026-07-08)
+
+### @angular/build
+
+| Commit                                                                                              | Type | Description                                                              |
+| --------------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------------ |
+| [df49966c6](https://github.com/angular/angular-cli/commit/df49966c6b8ec0c10b58fee18981fc2992ac071a) | fix  | fallback to build target preserveSymlinks option in karma runner         |
+| [9906add5b](https://github.com/angular/angular-cli/commit/9906add5b722cca7f61488b367dd73545c6e13bc) | fix  | prevent externalizing builder-injected i18n locale data                  |
+| [070155f6e](https://github.com/angular/angular-cli/commit/070155f6ead185d4b478d9034662d65b8bb86a23) | fix  | strip all vite id prefixes from minified code with external dependencies |
+
+### @angular/ssr
+
+| Commit                                                                                              | Type | Description                                                    |
+| --------------------------------------------------------------------------------------------------- | ---- | -------------------------------------------------------------- |
+| [c9aa354b1](https://github.com/angular/angular-cli/commit/c9aa354b1de0c946ddc994191613bb809a799f81) | fix  | replace all route parameters when resolving relative redirects |
+
+<!-- CHANGELOG SPLIT MARKER -->
+
 <a name="22.1.0-next.2"></a>
 
 # 22.1.0-next.2 (2026-07-01)
