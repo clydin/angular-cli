@@ -1,3 +1,15 @@
+<a name="20.3.32"></a>
+
+# 20.3.32 (2026-07-09)
+
+### @angular-devkit/build-angular
+
+| Commit                                                                                              | Type | Description                           |
+| --------------------------------------------------------------------------------------------------- | ---- | ------------------------------------- |
+| [d4e07cb3e](https://github.com/angular/angular-cli/commit/d4e07cb3e3f871822f9bf37fdea35814ec1cdb80) | fix  | update http-proxy-middleware to 3.0.7 |
+
+<!-- CHANGELOG SPLIT MARKER -->
+
 <a name="22.1.0-next.3"></a>
 
 # 22.1.0-next.3 (2026-07-09)
