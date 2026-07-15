@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import Piscina from 'piscina';
-import { removeSourceMappingURL } from '../../utils/source-map';
+import { loadInputSourceMap, removeSourceMappingURL } from '../../utils/source-map';
 
 interface JavaScriptTransformRequest {
   filename: string;
@@ -36,6 +36,51 @@ const textEncoder = new TextEncoder();
  */
 const LINKER_DECLARATION_PREFIX = 'ɵɵngDeclare';
 
+async function instrumentCoverage(
+  filename: string,
+  data: string,
+  useInputSourcemap: boolean,
+): Promise<string> {
+  try {
+    let resolvedPath = 'istanbul-lib-instrument';
+    try {
+      const requireFn = createRequire(filename);
+      resolvedPath = requireFn.resolve('istanbul-lib-instrument');
+    } catch {
+      // Fallback to pool worker import traversal
+    }
+
+    const { createInstrumenter } = (await import(
+      resolvedPath
+    )) as typeof import('istanbul-lib-instrument');
+    const instrumenter = createInstrumenter({
+      produceSourceMap: useInputSourcemap,
+      esModules: true,
+    });
+
+    const inputSourceMap = useInputSourcemap ? loadInputSourceMap(filename, data) : undefined;
+    const instrumentedCode = instrumenter.instrumentSync(
+      data,
+      filename,
+      inputSourceMap as Parameters<typeof instrumenter.instrumentSync>[2],
+    );
+    const lastMap = instrumenter.lastSourceMap();
+
+    if (useInputSourcemap && lastMap) {
+      const inlineMap = Buffer.from(JSON.stringify(lastMap)).toString('base64');
+
+      return instrumentedCode + `\n//# sourceMappingURL=data:application/json;base64,${inlineMap}`;
+    }
+
+    return removeSourceMappingURL(instrumentedCode);
+  } catch (error) {
+    throw new Error(
+      `The 'istanbul-lib-instrument' package is required for code coverage but was not found. Please install the package.`,
+      { cause: error },
+    );
+  }
+}
+
 export default async function transformJavaScript(
   request: JavaScriptTransformRequest,
 ): Promise<unknown> {
@@ -59,40 +104,18 @@ async function transformJavaScriptImpl(
   data: string,
   options: Omit<JavaScriptTransformRequest, 'filename' | 'data'>,
 ): Promise<string> {
-  const shouldLink = !options.skipLinker && (await requiresLinking(filename, data));
   const useInputSourcemap =
     options.sourcemap &&
     (!!options.thirdPartySourcemaps || !/[\\/]node_modules[\\/]/.test(filename));
 
-  const babelPlugins: PluginItem[] = [];
+  let code = data;
 
   if (options.instrumentForCoverage) {
-    try {
-      let resolvedPath = 'istanbul-lib-instrument';
-      try {
-        const requireFn = createRequire(filename);
-        resolvedPath = requireFn.resolve('istanbul-lib-instrument');
-      } catch {
-        // Fallback to pool worker import traversal
-      }
-
-      const istanbul = await import(resolvedPath);
-      const programVisitor = istanbul.programVisitor ?? istanbul.default?.programVisitor;
-
-      if (!programVisitor) {
-        throw new Error('programVisitor is not available in istanbul-lib-instrument.');
-      }
-
-      const { default: coveragePluginFactory } =
-        await import('../babel/plugins/add-code-coverage.js');
-      babelPlugins.push(coveragePluginFactory(programVisitor) as unknown as PluginItem);
-    } catch (error) {
-      throw new Error(
-        `The 'istanbul-lib-instrument' package is required for code coverage but was not found. Please install the package.`,
-        { cause: error },
-      );
-    }
+    code = await instrumentCoverage(filename, code, useInputSourcemap);
   }
+
+  const shouldLink = !options.skipLinker && (await requiresLinking(filename, code));
+  const babelPlugins: PluginItem[] = [];
 
   if (shouldLink) {
     // Lazy load the linker plugin only when linking is required
@@ -100,9 +123,7 @@ async function transformJavaScriptImpl(
     babelPlugins.push(linkerPlugin as unknown as PluginItem);
   }
 
-  let code = data;
-
-  // If Babel is needed, run it first
+  // If Babel is needed (e.g. for linking), run it
   if (babelPlugins.length > 0) {
     const result = await transformAsync(code, {
       filename,
