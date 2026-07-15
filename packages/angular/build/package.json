@@ -53,6 +53,7 @@
     "istanbul-lib-instrument": "6.0.3",
     "jsdom": "29.1.1",
     "less": "4.6.7",
+    "protobufjs": "^7.4.0",
     "ng-packagr": "22.1.0-next.3",
     "postcss": "8.5.16",
     "rollup": "4.62.2",
@@ -73,6 +74,7 @@
     "less": "^4.2.0",
     "ng-packagr": "0.0.0-NG-PACKAGR-PEER-DEP",
     "postcss": "^8.4.0",
+    "protobufjs": "^7.4.0",
     "rollup": "^4.0.0",
     "tailwindcss": "^2.0.0 || ^3.0.0 || ^4.0.0",
     "tslib": "^2.3.0",
@@ -105,6 +107,9 @@
       "optional": true
     },
     "less": {
+      "optional": true
+    },
+    "protobufjs": {
       "optional": true
     },
     "ng-packagr": {

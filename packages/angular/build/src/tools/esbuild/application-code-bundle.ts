@@ -35,6 +35,7 @@ import { createRxjsEsmResolutionPlugin } from './rxjs-esm-resolution-plugin';
 import { createServerBundleMetadata } from './server-bundle-metadata-plugin';
 import { createSourcemapIgnorelistPlugin } from './sourcemap-ignorelist-plugin';
 import { getFeatureSupport, isZonelessApp } from './utils';
+import { createProtoPlugin } from './proto-plugin';
 import { createVirtualModulePlugin } from './virtual-module-plugin';
 import { createWasmPlugin } from './wasm-plugin';
 
@@ -73,6 +74,7 @@ export function createBrowserCodeBundleOptions(
 
     buildOptions.plugins ??= [];
     buildOptions.plugins.push(
+      createProtoPlugin({ cache: loadCache }),
       createWasmPlugin({ allowAsync: zoneless, cache: loadCache }),
       createAngularLocalizeInitWarningPlugin(),
       createCompilerPlugin(
@@ -285,6 +287,7 @@ export function createServerMainCodeBundleOptions(
 
     buildOptions.plugins ??= [];
     buildOptions.plugins.push(
+      createProtoPlugin({ cache: loadResultCache }),
       createWasmPlugin({ allowAsync: zoneless, cache: loadResultCache }),
       createAngularLocalizeInitWarningPlugin(),
       createCompilerPlugin(
