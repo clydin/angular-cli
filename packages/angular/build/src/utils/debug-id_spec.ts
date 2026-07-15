@@ -6,7 +6,12 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import { generateDebugId, injectDebugIdIntoJs, injectDebugIdIntoSourceMap } from './debug-id';
+import {
+  generateDebugId,
+  injectDebugIdIntoJs,
+  injectDebugIdIntoSourceMap,
+  stripDebugIdFromSourceMap,
+} from './debug-id';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -59,6 +64,17 @@ describe('debug-id', () => {
       // Re-running with the same id is a no-op.
       expect(injectDebugIdIntoJs(result, id)).toBe(result);
     });
+
+    it('does not replace a debugId comment that is inside a string or template literal', () => {
+      const text =
+        'const t = `\n//# debugId=00000000-0000-5000-8000-000000000000\n`;\n//# sourceMappingURL=foo.js.map\n';
+      const result = injectDebugIdIntoJs(text, id);
+      expect(result).toBe(
+        'const t = `\n//# debugId=00000000-0000-5000-8000-000000000000\n`;\n' +
+          `//# debugId=${id}\n` +
+          '//# sourceMappingURL=foo.js.map\n',
+      );
+    });
   });
 
   describe('injectDebugIdIntoSourceMap', () => {
@@ -93,6 +109,29 @@ describe('debug-id', () => {
     it('returns the original input when JSON is malformed', () => {
       const malformed = '{ this is not json';
       expect(injectDebugIdIntoSourceMap(malformed, id)).toBe(malformed);
+    });
+  });
+
+  describe('stripDebugIdFromSourceMap', () => {
+    it('removes the debugId field from pretty-printed source maps', () => {
+      const original = '{\n\t"version": 3,\n\t"mappings": ""\n}';
+      const updated =
+        '{\n\t"version": 3,\n\t"mappings": "",\n\t"debugId": "11111111-2222-5333-9444-555555555555"\n}';
+      expect(stripDebugIdFromSourceMap(updated)).toBe(original);
+    });
+
+    it('removes the debugId field from minified source maps', () => {
+      const original = '{"version":3,"mappings":""}';
+      const updated =
+        '{"version":3,"mappings":"","debugId":"11111111-2222-5333-9444-555555555555"}';
+      expect(stripDebugIdFromSourceMap(updated)).toBe(original);
+    });
+
+    it('removes the debugId field when it is the first property', () => {
+      const original = '{\n\t"version": 3,\n\t"mappings": ""\n}';
+      const updated =
+        '{\n\t"debugId": "11111111-2222-5333-9444-555555555555",\n\t"version": 3,\n\t"mappings": ""\n}';
+      expect(stripDebugIdFromSourceMap(updated)).toBe(original);
     });
   });
 });

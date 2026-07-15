@@ -40,8 +40,8 @@ export function generateDebugId(name: string | Uint8Array): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 }
 
-/** Pattern matching an existing `//# debugId=<uuid>` comment anywhere in the file. */
-const DEBUG_ID_COMMENT = /\n\/\/# debugId=[^\r\n]*\n?/;
+/** Pattern matching an existing `//# debugId=<uuid>` comment at the end of the file. */
+const DEBUG_ID_COMMENT = /(\n\/\/# debugId=[^\r\n]*)(\n\/\/# sourceMappingURL=[^\r\n]*)?(\s*)$/;
 
 /** Pattern matching the `//# sourceMappingURL=` comment, used to position the debug-id line. */
 const SOURCE_MAPPING_URL_COMMENT = /\n\/\/# sourceMappingURL=[^\r\n]*\s*$/;
@@ -58,7 +58,7 @@ export function injectDebugIdIntoJs(text: string, id: string): string {
 
   // Replace any existing debugId comment to keep the operation idempotent.
   if (DEBUG_ID_COMMENT.test(text)) {
-    return text.replace(DEBUG_ID_COMMENT, `\n${comment}\n`);
+    return text.replace(DEBUG_ID_COMMENT, (_, p1, p2, p3) => `\n${comment}${p2 || ''}${p3 || ''}`);
   }
 
   if (SOURCE_MAPPING_URL_COMMENT.test(text)) {
@@ -95,4 +95,12 @@ export function injectDebugIdIntoSourceMap(json: string, id: string): string {
   const indent = json.match(/^[^{]*{\r?\n([ \t]+)/)?.[1];
 
   return JSON.stringify(parsed, null, indent);
+}
+
+/**
+ * Strips any existing `debugId` field from the source map JSON string to restore
+ * the original JSON contents for deterministic/idempotent hashing.
+ */
+export function stripDebugIdFromSourceMap(json: string): string {
+  return json.replace(/,\s*"debugId"\s*:\s*"[^"]*"|\s*"debugId"\s*:\s*"[^"]*"\s*,?/g, '');
 }

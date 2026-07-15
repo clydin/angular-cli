@@ -11,6 +11,7 @@ import {
   generateDebugId,
   injectDebugIdIntoJs,
   injectDebugIdIntoSourceMap,
+  stripDebugIdFromSourceMap,
 } from '../../utils/debug-id';
 
 /**
@@ -42,8 +43,10 @@ export function injectDebugIds(outputFiles: BuildOutputFile[]): void {
       continue;
     }
 
-    const id = generateDebugId(map.contents);
+    const mapText = map.text;
+    const mapTextForHash = stripDebugIdFromSourceMap(mapText);
+    const id = generateDebugId(mapTextForHash);
     file.contents = encoder.encode(injectDebugIdIntoJs(file.text, id));
-    map.contents = encoder.encode(injectDebugIdIntoSourceMap(map.text, id));
+    map.contents = encoder.encode(injectDebugIdIntoSourceMap(mapText, id));
   }
 }
