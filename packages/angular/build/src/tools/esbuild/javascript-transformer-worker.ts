@@ -7,9 +7,7 @@
  */
 
 import { type PluginItem, transformAsync } from '@babel/core';
-import fs from 'node:fs';
 import { createRequire } from 'node:module';
-import path from 'node:path';
 import Piscina from 'piscina';
 import { removeSourceMappingURL } from '../../utils/source-map';
 
@@ -47,12 +45,6 @@ export default async function transformJavaScript(
   // Transfer the data via `move` instead of cloning
   return Piscina.move(textEncoder.encode(transformedData));
 }
-
-/**
- * Cached instance of the compiler-cli linker's createEs2015LinkerPlugin function.
- */
-let linkerPluginCreator:
-  typeof import('@angular/compiler-cli/linker/babel').createEs2015LinkerPlugin | undefined;
 
 async function transformJavaScriptImpl(
   filename: string,
@@ -94,15 +86,23 @@ async function transformJavaScriptImpl(
     }
   }
 
-  if (shouldLink) {
-    // Lazy load the linker plugin only when linking is required
-    const linkerPlugin = await createLinkerPlugin(options);
-    babelPlugins.push(linkerPlugin as unknown as PluginItem);
-  }
-
   let code = data;
 
-  // If Babel is needed, run it first
+  if (shouldLink) {
+    const { linkWithOxc } = await import('../angular/linker/oxc-linker.js');
+    const result = linkWithOxc(filename, code, {
+      sourcemap: useInputSourcemap,
+      jit: options.jit,
+    });
+    code = result.code;
+    if (useInputSourcemap && result.map) {
+      code = removeSourceMappingURL(code);
+      const base64Map = Buffer.from(result.map).toString('base64');
+      code += `\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64Map}`;
+    }
+  }
+
+  // If Babel is needed for code coverage, run it
   if (babelPlugins.length > 0) {
     const result = await transformAsync(code, {
       filename,
@@ -156,45 +156,4 @@ async function requiresLinking(path: string, source: string): Promise<boolean> {
   // There is a low chance of a false positive but the names are fairly unique
   // and the result would be an unnecessary no-op additional plugin pass.
   return source.includes(LINKER_DECLARATION_PREFIX);
-}
-
-async function createLinkerPlugin(options: Omit<JavaScriptTransformRequest, 'filename' | 'data'>) {
-  linkerPluginCreator ??= (await import('@angular/compiler-cli/linker/babel'))
-    .createEs2015LinkerPlugin;
-
-  const linkerPlugin = linkerPluginCreator({
-    linkerJitMode: options.jit,
-    // This is a workaround until https://github.com/angular/angular/issues/42769 is fixed.
-    sourceMapping: false,
-    logger: {
-      level: 1, // Info level
-      debug(...args: string[]) {
-        // eslint-disable-next-line no-console
-        console.debug(args);
-      },
-      info(...args: string[]) {
-        // eslint-disable-next-line no-console
-        console.info(args);
-      },
-      warn(...args: string[]) {
-        // eslint-disable-next-line no-console
-        console.warn(args);
-      },
-      error(...args: string[]) {
-        // eslint-disable-next-line no-console
-        console.error(args);
-      },
-    },
-    fileSystem: {
-      resolve: path.resolve,
-      exists: fs.existsSync,
-      dirname: path.dirname,
-      relative: path.relative,
-      readFile: fs.readFileSync,
-      // Node.JS types don't overlap the Compiler types.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any,
-  });
-
-  return linkerPlugin;
 }
