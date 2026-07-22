@@ -9,6 +9,7 @@
 import type { BuilderContext, BuilderOutput } from '@angular-devkit/architect';
 import assert from 'node:assert';
 import path from 'node:path';
+import { setTimeout } from 'node:timers/promises';
 import type * as Vite from 'vite' with {
   'resolution-mode': 'import',
 };
@@ -207,8 +208,35 @@ export class VitestExecutor implements TestExecutor {
   }
 
   async [Symbol.asyncDispose](): Promise<void> {
+    if (!this.vitest) {
+      return;
+    }
+
     this.debugLog(DebugLogLevel.Info, 'Disposing VitestExecutor: Closing Vitest instance.');
-    await this.vitest?.close();
+
+    const controller = new AbortController();
+    const timeoutMs = 10_000;
+
+    try {
+      await Promise.race([
+        this.vitest.close(),
+        setTimeout(timeoutMs, undefined, { signal: controller.signal, ref: false })
+          .then(() => {
+            this.logger.warn(
+              `Vitest instance failed to close cleanly within ${timeoutMs}ms. Continuing teardown...`,
+            );
+          })
+          .catch(() => {
+            // Suppress AbortError triggered by controller.abort() when close() resolves first
+          }),
+      ]);
+    } catch (error: unknown) {
+      assertIsError(error);
+      this.logger.error(`An error occurred while closing Vitest instance: ${error.message}`);
+    } finally {
+      controller.abort();
+    }
+
     this.debugLog(DebugLogLevel.Info, 'Vitest instance closed.');
   }
 
