@@ -102,7 +102,9 @@ function determineCoverageProvider(
       const hasIstanbul = checkInstalled('@vitest/coverage-istanbul');
       const hasV8 = checkInstalled('@vitest/coverage-v8');
 
-      if (hasIstanbul && !hasV8) {
+      // Favor istanbul when browser testing is enabled (to avoid slow CDP V8 HTTP sourcemap remapping)
+      // or when only istanbul is installed.
+      if (hasIstanbul && (browsersToCheck.length > 0 || !hasV8)) {
         determinedProvider = 'istanbul';
       } else {
         determinedProvider = 'v8';
