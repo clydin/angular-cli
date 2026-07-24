@@ -113,7 +113,7 @@ export async function* runEsBuildBuildAction(
 
       // Setup a watcher
       const { createWatcher } = await import('../../tools/esbuild/watcher');
-      watcher = createWatcher({
+      watcher = await createWatcher({
         polling: typeof poll === 'number',
         interval: poll,
         followSymlinks: preserveSymlinks,
