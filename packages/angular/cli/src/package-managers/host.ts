@@ -131,7 +131,6 @@ export const NodeJS_HOST: Host = {
     return new Promise((resolve, reject) => {
       const env: Record<string, string | undefined> = {
         ...process.env,
-        ...options.env,
         //  NPM updater notifier will prevents the child process from closing until it timeout after 3 minutes.
         NO_UPDATE_NOTIFIER: '1',
         NPM_CONFIG_UPDATE_NOTIFIER: 'false',
@@ -148,6 +147,10 @@ export const NodeJS_HOST: Host = {
       ) {
         delete env['npm_config_registry'];
         delete env['NPM_CONFIG_REGISTRY'];
+      }
+
+      if (options.env) {
+        Object.assign(env, options.env);
       }
 
       const spawnOptions = {

@@ -633,4 +633,56 @@ describe('PackageManager', () => {
       expect(age).toBe(0);
     });
   });
+
+  describe('custom registry', () => {
+    const customRegistry = 'https://custom-registry.example.com/npm?token=xyz&scope=abc';
+
+    for (const [name, expectedEnv] of [
+      ['npm', { NPM_CONFIG_REGISTRY: customRegistry }],
+      ['yarn', { YARN_NPM_REGISTRY_SERVER: customRegistry }],
+      ['yarn-classic', { NPM_CONFIG_REGISTRY: customRegistry }],
+      ['pnpm', { NPM_CONFIG_REGISTRY: customRegistry }],
+      [
+        'bun',
+        {
+          BUN_CONFIG_REGISTRY: customRegistry,
+          NPM_CONFIG_REGISTRY: customRegistry,
+        },
+      ],
+    ] as const) {
+      it(`should pass registry via environment variable for ${name}`, async () => {
+        const pm = new PackageManager(host, '/tmp', SUPPORTED_PACKAGE_MANAGERS[name]);
+        await pm.install({ registry: customRegistry });
+
+        expect(runCommandSpy).toHaveBeenCalledWith(
+          jasmine.any(String),
+          jasmine.any(Array),
+          jasmine.objectContaining({
+            env: expectedEnv,
+          }),
+        );
+
+        const args = runCommandSpy.calls.mostRecent().args[1] as string[];
+        expect(args).not.toContain('--registry');
+        expect(args).not.toContain(customRegistry);
+      });
+    }
+
+    it('should pass registry via environment variable for add command', async () => {
+      const pm = new PackageManager(host, '/tmp', SUPPORTED_PACKAGE_MANAGERS['npm']);
+      await pm.add('foo', 'none', false, false, false, { registry: customRegistry });
+
+      expect(runCommandSpy).toHaveBeenCalledWith(
+        jasmine.any(String),
+        jasmine.any(Array),
+        jasmine.objectContaining({
+          env: { NPM_CONFIG_REGISTRY: customRegistry },
+        }),
+      );
+
+      const args = runCommandSpy.calls.mostRecent().args[1] as string[];
+      expect(args).not.toContain('--registry');
+      expect(args).not.toContain(customRegistry);
+    });
+  });
 });
